@@ -488,13 +488,31 @@ static void I2CM_PrintRawSlaveTransferResult(uint32_t Status, I2CM_Transfer_t *T
 
     if (DataLen > 0) {
         I2CM_PRINTF("%s Data Length %d.\r\n", OpStr, (int)DataLen);
-        if (OpCode == I2C_MASTER_TRANSFER_READ) {
-            I2CM_PRINTF("Data: ");
-            for (i = 0; i < DataLen; i++) {
-                I2CM_PRINTF("%x ", Data[i]);
-            }
-            I2CM_PRINTF("\r\n");
-        }
+       if (OpCode == I2C_MASTER_TRANSFER_READ && DataLen == 6) {
+    /* SHT40x Berechnung */
+    uint16_t t_raw  = ((uint16_t)Data[0] << 8) | Data[1];
+    uint16_t rh_raw = ((uint16_t)Data[3] << 8) | Data[4];
+
+    int32_t temp_x10 = -450 + (1750 * (int32_t)t_raw  / 65535);
+    int32_t rh_x10   =  -60 + (1250 * (int32_t)rh_raw / 65535);
+
+    if (rh_x10 < 0)    rh_x10 = 0;
+    if (rh_x10 > 1000) rh_x10 = 1000;
+
+    I2CM_PRINTF("Temperatur : %d.%d C\r\n",
+                (int)(temp_x10 / 10),
+                (int)(temp_x10 % 10));
+    I2CM_PRINTF("Feuchte    : %d.%d %%\r\n",
+                (int)(rh_x10 / 10),
+                (int)(rh_x10 % 10));
+} else if (OpCode == I2C_MASTER_TRANSFER_READ) {
+    /* Andere Sensoren — normale Hex Ausgabe */
+    I2CM_PRINTF("Data: ");
+    for (i = 0; i < DataLen; i++) {
+        I2CM_PRINTF("0x%02x ", Data[i]);
+    }
+    I2CM_PRINTF("\r\n");
+}
     }
 
     return;
@@ -605,7 +623,7 @@ static void I2CM_DumpTransferDesc(I2CM_Transfer_t *Transfer)
         I2CM_PRINTF("		flag: %d\r\n", (int)Desc->Flags);
         I2CM_PRINTF("		buffer:");
         for (j = 0; j < Desc->Length; j++) {
-            I2CM_PRINTF("0x%x", Desc->Buffer[j]);
+            I2CM_PRINTF("0x%02x ", Desc->Buffer[j]);
         }
         I2CM_PRINTF("\r\n");
     }
@@ -930,10 +948,29 @@ qapi_Status_t cmd_I2CM_Transfer(uint32_t __attribute__((__unused__)) Parameter_C
         Data = NULL;
     }
 
-    if ((OpCode == I2C_MASTER_TRANSFER_WRITE) && (strlen(Data) != DataLen)) {
-        I2CM_PRINTF("The lenght of Data is not same as DataLen.\r\n");
+    if (OpCode == I2C_MASTER_TRANSFER_WRITE) {
+    /* Hex-String zu echten Bytes umwandeln: "FD" → 0xFD */
+    if (strlen(Data) != DataLen * 2) {
+        I2CM_PRINTF("Data muss genau %d Hex-Zeichen haben (z.B. 'FD' fuer 1 Byte).\r\n", (int)(DataLen * 2));
         goto err2;
     }
+    uint8_t hex_buf[I2C_MAX_TRANSFER_DATA_LENGTH];
+    for (uint32_t i = 0; i < DataLen; i++) {
+        char byte_str[3] = { Data[i*2], Data[i*2+1], '\0' };
+        hex_buf[i] = (uint8_t)strtoul(byte_str, NULL, 16);
+    }
+    if (I2CM_CheckTransferParameters(Instance, Frequency, SlaveType, Address, DataLen) != QAPI_OK) {
+        goto err2;
+    }
+    I2CM_Ctxt[Instance].SlaveType = SlaveType;
+    Status = I2CM_TransferHandler(Instance, SlaveAddress, Frequency,
+                                  OpCode, Address, DataLen, hex_buf);
+    if (Status != QAPI_OK) {
+        I2CM_PRINTF("Transfer fehlgeschlagen: %d.\r\n", (int)Status);
+        return QAPI_ERROR_CONSOLE_COMMAND_STATUS_ERROR;
+    }
+    return QAPI_OK;
+}
 
     if (I2CM_CheckTransferParameters(Instance, Frequency, SlaveType, Address, DataLen) != QAPI_OK) {
         goto err2;

@@ -142,7 +142,7 @@ static int wmi_send_cmd(uint16_t cmd_id, void *data, uint16_t len)
 static QCLI_Command_Status_t cmd_RTT_Cfg(uint32_t Parameter_Count, QCLI_Parameter_t *Parameter_List)
 {
     /* Example: rtt_cfg ftms=8 delta=20 asap=1 bw=0 cal=0x0 */
-    for (uint32_t i = 0; i < Parameter_Count; i++) {
+    for (uint32_t i = 0; i < Parameter_Count; i++) { 
         const char *s = Parameter_List[i].String_Value;
         if (s == NULL || s[0] == 0) {
             continue;

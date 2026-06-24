@@ -1,0 +1,150 @@
+menu "wifi lib setting"
+
+config WIFILIB_6GHZ
+    bool "enable 6G support in wifi lib"
+    default y
+
+config MGMT_FILTER_DEMO 
+    bool "enable management frames filter DEMO"
+    default n
+
+config ACK_TIMEOUT_MODIFY_ENABLE
+    bool "enable set ack timeout"
+    default y
+
+config QOS_NULL_DATA_MAX_RETRY_COUNT
+    hex "set qos null data max retry count"
+    default 20 if ACK_TIMEOUT_MODIFY_ENABLE = n
+    default 10 if ACK_TIMEOUT_MODIFY_ENABLE = y
+
+config QOS_NULL_DATA_RETRY_DELAY
+    hex "set qos null data retry delay"
+    default 100 if ACK_TIMEOUT_MODIFY_ENABLE = n
+    default 100 if ACK_TIMEOUT_MODIFY_ENABLE = y
+
+config HEAVY_CLIP_ENABLE
+    bool "enable heavy_clip adjust"
+    default n
+
+config HEAVY_CLIP_BOARDS_TYPE
+    int "select xPA=0 or iPA=1"
+    depends on HEAVY_CLIP_ENABLE
+    range 0 1
+    default 0
+
+config HEAVY_CLIP_LEVEL_2G
+    int "select heavy_clip level in 2g"
+    depends on HEAVY_CLIP_ENABLE
+    range 0 2
+    default 0
+
+config HEAVY_CLIP_LEVEL_5G
+    int "select heavy_clip level in 5g"
+    depends on HEAVY_CLIP_ENABLE
+    range 0 2
+    default 0
+
+config PEAKW_11N_0_2G
+    hex "peak windowing clip thresolds for 11n packets in 2g"
+    depends on HEAVY_CLIP_ENABLE
+    default 0x5D47473C if HEAVY_CLIP_LEVEL_2G = 0 && HEAVY_CLIP_BOARDS_TYPE = 0
+    default 0x64584E2E if HEAVY_CLIP_LEVEL_2G = 1 && HEAVY_CLIP_BOARDS_TYPE = 0
+    default 0xFFFFFFFF if HEAVY_CLIP_LEVEL_2G = 2 && HEAVY_CLIP_BOARDS_TYPE = 0
+    default 0x5D47473C if HEAVY_CLIP_LEVEL_2G = 0 && HEAVY_CLIP_BOARDS_TYPE = 1
+    default 0x64584E3C if HEAVY_CLIP_LEVEL_2G = 1 && HEAVY_CLIP_BOARDS_TYPE = 1
+    default 0xFFFFFFFF if HEAVY_CLIP_LEVEL_2G = 2 && HEAVY_CLIP_BOARDS_TYPE = 1
+
+config PEAKW_11A_0_2G
+    hex "peak windowing clip thresolds for 11a packets in 2g"
+    depends on HEAVY_CLIP_ENABLE
+    default 0x564E4739 if HEAVY_CLIP_LEVEL_2G = 0 && HEAVY_CLIP_BOARDS_TYPE = 0
+    default 0x64584E2E if HEAVY_CLIP_LEVEL_2G = 1 && HEAVY_CLIP_BOARDS_TYPE = 0
+    default 0xFFFFFFFF if HEAVY_CLIP_LEVEL_2G = 2 && HEAVY_CLIP_BOARDS_TYPE = 0
+    default 0x564E4739 if HEAVY_CLIP_LEVEL_2G = 0 && HEAVY_CLIP_BOARDS_TYPE = 1
+    default 0x64584E39 if HEAVY_CLIP_LEVEL_2G = 1 && HEAVY_CLIP_BOARDS_TYPE = 1
+    default 0xFFFFFFFF if HEAVY_CLIP_LEVEL_2G = 2 && HEAVY_CLIP_BOARDS_TYPE = 1
+
+config PEAKW_11A_1_2G
+    hex "peak windowing clip thresolds for 11a packets in 2g"
+    depends on HEAVY_CLIP_ENABLE
+    default 0x5D if HEAVY_CLIP_LEVEL_2G = 0
+    default 0x64 if HEAVY_CLIP_LEVEL_2G = 1
+    default 0xFF if HEAVY_CLIP_LEVEL_2G = 2
+
+config PEAKW_11N_0_5G
+    hex "peak windowing clip thresolds for 11n packets in 5g"
+    depends on HEAVY_CLIP_ENABLE
+    default 0x62514D3F if HEAVY_CLIP_LEVEL_5G = 0
+    default 0x62514D3F if HEAVY_CLIP_LEVEL_5G = 1
+    default 0xFFFFFFFF if HEAVY_CLIP_LEVEL_5G = 2
+
+config PEAKW_11A_0_5G
+    hex "peak windowing clip thresolds for 11a packets in 5g"
+    depends on HEAVY_CLIP_ENABLE
+    default 0x60523F3F if HEAVY_CLIP_LEVEL_5G = 0
+    default 0x60523F3F if HEAVY_CLIP_LEVEL_5G = 1
+    default 0xFFFFFFFF if HEAVY_CLIP_LEVEL_5G = 2
+
+config PEAKW_11A_1_5G
+    hex "peak windowing clip thresolds for 11a packets in 5g"
+    depends on HEAVY_CLIP_ENABLE
+    default 0x62 if HEAVY_CLIP_LEVEL_5G = 0
+    default 0x62 if HEAVY_CLIP_LEVEL_5G = 1
+    default 0xFF if HEAVY_CLIP_LEVEL_5G = 2
+
+config SRRC_BAND_EDGE_SUPPORT
+    bool "enable band edge adjust for ch12 and ch13"
+    default y
+
+config XO_USE_BDF_OVERRIDE
+    bool "enable using BDF to override OTP XO calibration result"
+    default n
+
+config SAT_STEP_MANUAL_ADJUSTMENT
+    bool "enable sat step manual adjustment function"
+    default n
+
+if SAT_STEP_MANUAL_ADJUSTMENT
+
+config SAT_STEP_2G_SS
+	hex "2G SS (Slow-Slow) chip SAT Step value"
+	default 0x00000060
+
+config SAT_STEP_2G_TT
+	hex "2G TT (Typical-Typical) chip SAT Step value"
+	default 0x00000060
+
+config SAT_STEP_2G_FF
+	hex "2G FF (Fast-Fast) chip SAT Step value"
+	default 0x00000066
+
+config SAT_STEP_5G_SS
+	hex "5G SS (Slow-Slow) chip SAT Step value"
+	default 0x00000064
+
+config SAT_STEP_5G_TT
+	hex "5G TT (Typical-Typical) chip SAT Step value"
+	default 0x00000064
+
+config SAT_STEP_5G_FF
+	hex "5G FF (Fast-Fast) chip SAT Step value"
+	default 0x00000064
+
+endif # SAT_STEP_MANUAL_ADJUSTMENT
+
+config ENABLE_P2P_MODE
+    bool "enable p2p support"
+    default n
+
+config ENABLE_P2P_LIB
+    bool "enable p2p lib support"
+    default n
+
+config TOTAL_BEACON_WAIT_TIME
+    int "Total beacon wait time in power save mode"
+    default 25000
+
+config WLAN_8021X_LIB
+    bool "enable 8021x"
+    default y
+            endmenu

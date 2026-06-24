@@ -1,0 +1,54 @@
+#Copyright (c) 2024 Qualcomm Innovation Center, Inc. All rights reserved.
+#SPDX-License-Identifier: BSD-3-Clause-Clear
+#
+
+import("//configs_decl.gni")
+#import("${root_build_dir}/mainconfig.gni")
+
+
+lib_inc = [
+    "libc/include",
+    "../../comp/posix/FreeRTOS-Plus-POSIX/include/portable/fm",
+    "../../comp/posix/FreeRTOS-Plus-POSIX/include/portable",
+    "../../comp/posix/FreeRTOS-Plus-POSIX/include",
+    "../../comp/posix/FreeRTOS-Plus-POSIX/source",
+    "../../comp/posix/include/private",
+    "../../comp/posix/include",
+    "misc/inc"
+]
+
+lib_src = [
+    "libc/source/malloc.c",
+    "libc/source/printf.c",
+    "libc/source/assert.c",
+    "libc/source/safeAPI.c",
+    "libc/source/3rdparty/crt_abstractions.c",
+    "misc/src/fifo.c",
+    "misc/src/sort.c",
+    "misc/src/nt_osal.c",
+    "misc/src/nt_heap_stats.c",
+]
+
+config("_config") {
+    include_dirs = lib_inc
+}
+
+source_set("lib") {
+    sources = lib_src
+    include_dirs = ["../../comp/FreeRTOS-Plus-POSIX",]
+    if (CONFIG_FREERTOS_PLUS_POSIX) {
+        sources += [
+            "../../comp/posix/FreeRTOS-Plus-POSIX/source/FreeRTOS_POSIX_clock.c",
+            "../../comp/posix/FreeRTOS-Plus-POSIX/source/FreeRTOS_POSIX_mqueue.c",
+            "../../comp/posix/FreeRTOS-Plus-POSIX/source/FreeRTOS_POSIX_pthread_barrier.c",
+            "../../comp/posix/FreeRTOS-Plus-POSIX/source/FreeRTOS_POSIX_pthread.c",
+            "../../comp/posix/FreeRTOS-Plus-POSIX/source/FreeRTOS_POSIX_pthread_cond.c",
+            "../../comp/posix/FreeRTOS-Plus-POSIX/source/FreeRTOS_POSIX_pthread_mutex.c",
+            "../../comp/posix/FreeRTOS-Plus-POSIX/source/FreeRTOS_POSIX_sched.c",
+            "../../comp/posix/FreeRTOS-Plus-POSIX/source/FreeRTOS_POSIX_semaphore.c",
+            "../../comp/posix/FreeRTOS-Plus-POSIX/source/FreeRTOS_POSIX_timer.c",
+            "../../comp/posix/FreeRTOS-Plus-POSIX/source/FreeRTOS_POSIX_unistd.c",
+            "../../comp/posix/FreeRTOS-Plus-POSIX/source/FreeRTOS_POSIX_utils.c",
+        ]
+    }
+}

@@ -1,0 +1,60 @@
+#
+#import("${root_build_dir}/mainconfig.gni")
+import("//configs_decl.gni")
+
+system_inc = [
+    "inc",
+    "../common",
+    "//modules/hal/qcc730/fs",
+    "//modules/hal/qcc730/wdt",
+    "//modules/wifi/inc/",
+    "//modules/core/common/",
+]
+
+system_src = [
+    "sys_src/ext_rtc_intr.c",
+    "sys_src/nt_logger.c",
+    "sys_src/nt_minimum_code.c",
+    "sys_src/wifi_fw_dbg_nodes.c",
+    "sys_src/wifi_fw_dbg_infra.c",
+    "sys_src/wifi_fw_pwr_cb_infra.c",
+    "sys_src/wifi_fw_pmic_driver.c",
+    "sys_src/fdi_rmc.c",
+    "sys_src/nt_pmic_driver.c",
+    "sys_src/nt_pmu_drivers.c",
+    "sys_src/nt_socpm_rtos_api.c",
+    "sys_src/nt_socpm_sleep.c",
+    "sys_src/nt_wifi_driver.c",
+    "sys_src/wifi_fw_init.c",
+    "sys_src/ferm_uart.c",
+    "sys_src/unpa.c",
+    "sys_src/unpa_client.c",
+    "sys_src/unpa_query.c",
+    "sys_src/unpa_resource.c",
+    "sys_src/unpa_test.c",
+    "sys_src/nt_cpr_driver.c",
+    "sys_src/wifi_fw_logger.c",
+    "sys_src/wifi_fw_ext_intr.c",
+    "sys_src/wifi_fw_cpr_driver.c",
+    "sys_src/wlan_sleep_clk_cal.c",
+    "sys_src/wifi_fw_pmu_ts_cfg.c",
+    "sys_src/nt_cc_batt_mng.c",
+    "sys_src/nt_cc_battery_driver.c",
+    "sys_src/nt_sys_monitoring.c",
+    "sys_src/ferm_hkadc_drv.c",
+    "sys_src/err_jettison_core_m4_patch.o",
+]
+
+config("_config") {
+    include_dirs = system_inc
+}
+
+source_set("system") {
+    sources = system_src
+    if (CONFIG_MPU_ENABLE) {
+        sources += [ "sys_src/ferm_mpu.c" ]
+    }
+    if (CONFIG_WIFI_FW_COREDUMP_SUPPORT) {
+        sources += [ "sys_src/err.c" ]
+}
+}

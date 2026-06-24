@@ -1,0 +1,224 @@
+# Copyright (c) 2024 Qualcomm Innovation Center, Inc. All rights reserved.
+# SPDX-License-Identifier: BSD-3-Clause-Clear
+#
+#import("${root_build_dir}/mainconfig.gni")
+import("//configs_decl.gni")
+
+net_demo_src = [
+    "net/src/net_shell.c",
+    "net/src/iperf.c",
+    "net/src/ssl_demo.c",
+    "net/src/ping.c",
+    "net/src/prefix.c",
+    "//modules/net/rvr_lite/src/rvr_lite.c",
+]
+
+i2c_demo_src = [
+   "peripherals/i2c/i2c_demo.c",
+]
+
+qtmr_demo_src = [
+    "peripherals/qtmr/qtmr_demo.c",
+]
+
+lowpower_demo_src = [
+    "lowpower/lowpower_shell.c",
+]
+
+prof_demo_src = [
+    "prof/prof_demo.c",
+    "prof/prof_test_inst.c",
+]
+
+prof_demo_inc = [
+    "//modules/wifi/qcc730/core/system/inc/"
+]
+
+ota_demo_inc = [
+    "ota",
+    "ota/plugins/tftp",
+]
+
+flash_demo_src = [
+    "peripherals/flash/flash_demo.c",
+]
+
+ota_demo_src = [
+    "ota/ota_demo.c",
+    "ota/plugins/tftp/ota_tftp.c",
+]
+
+gpio_demo_src = [
+    "peripherals/gpio/gpio_demo.c"
+]
+
+mpu_demo_src = [
+    "mpu/mpu_demo.c"
+]
+
+crypto_demo_src = [
+    "crypto/crypto_demo.c",
+]
+
+qcc_demo_src = [
+    "qcc/qcc_demo.c",
+]
+not_needed("*", [ ])
+
+config("_config") {
+    include_dirs = []
+    if (CONFIG_PROF) {
+        include_dirs += prof_demo_inc
+    }
+    if (CONFIG_FW_UPGRADE) {
+        include_dirs += ota_demo_inc
+    }
+}
+
+source_set("common") {
+    sources = []
+    include_dirs = []
+
+    sources += crypto_demo_src
+    include_dirs += ["//demo/common/crypto"]
+
+    sources += qcc_demo_src
+    include_dirs += ["//demo/common/qcc"]
+
+    if (CONFIG_NET) {
+        if (CONFIG_NET_SHELL) {
+            include_dirs += [
+                "//modules/net/rvr_lite/inc",
+                "//demo/common/net/src",
+            ]
+            sources += net_demo_src
+        }
+    }
+    if (CONFIG_I2CM_SHELL) {
+        include_dirs += ["//modules/hal/qcc730/qtmr"]
+        sources += i2c_demo_src
+    }
+    if (CONFIG_QTIMER) {
+        sources += qtmr_demo_src
+    }
+    if (CONFIG_LOWPOWER_SHELL) {
+        include_dirs += ["//../comp/lwip/src/include/lwip"]
+        include_dirs += ["//../comp/lwip/src/include/lwip/prot"]
+        sources += lowpower_demo_src
+    }
+    if (CONFIG_PROF) {
+        sources += prof_demo_src
+    }
+    if (CONFIG_FLASH_SHELL) {
+        sources += flash_demo_src
+    }
+    if (CONFIG_PLATFORM_SHELL) {
+        include_dirs += ["//modules/hal/qcc730/qcspi"]
+        include_dirs += ["//modules/core/system/inc"]
+        sources += [ "platform/platform_shell.c" ]
+    }
+    if (CONFIG_WLAN) {
+        if (CONFIG_WIFI_SHELL) {
+            include_dirs += ["//drivers/wlan"]
+            sources += [ "wlan/wifi_shell.c"]
+        }
+        if (CONFIG_WLAN_8021X) {
+            include_dirs += ["//modules/supplicant/inc"]
+    }
+    }
+    if (CONFIG_UNITTEST_SHELL) {
+        sources += [
+            "unit_test/unit_test_shell.c"
+        ]
+    }
+    
+    if (CONFIG_SIGMA_TRAFFIC) {    
+        sources += [
+            "wificert/sigma_traffic/sigma_shell.c",
+            "wificert/sigma_traffic/sigma_udp.c",
+        ]
+    }
+
+    if (CONFIG_UART_SHELL) {
+        sources += [
+            "peripherals/uart/uart_shell.c",
+        ]
+    }
+
+    if (CONFIG_QCSPI_HFC_TEST) {
+        include_dirs += ["hfc"]
+        sources += ["hfc/hfc_demo.c"]
+    }
+
+
+    if (defined(CONFIG_FWUP_DEMO)) {
+        defines = [ "CONFIG_FWUP_DEMO=1", ]
+        include_dirs += [
+            "ota",
+            "ota/plugins/tftp",
+        ]
+        sources += [
+            "ota/ota_demo.c",
+            "ota/plugins/tftp/ota_tftp.c",
+        ]
+    }
+    
+    if(CONFIG_QAT_OTA_DEMO){
+        include_dirs += [
+            "ota/plugins/http",
+        ]
+        sources += [
+            "ota/plugins/http/ota_http.c",
+        ]
+    }
+    if (CONFIG_MPU_DEMO) {
+        include_dirs += ["mpu"]
+        sources += mpu_demo_src
+    }
+    
+    if (CONFIG_GPIO_SHELL) {
+        include_dirs += ["peripherals/gpio", "peripherals/i2c", "//modules/console"]
+        sources += gpio_demo_src
+    }
+
+    if (CONFIG_NET) {    
+        sources += [
+            "net/src/pmtud_demo.c",
+            "net/src/pmtud.c",
+        ]
+    }
+
+    if (CONFIG_HTTP_CLIENT_DEMO) {    
+        include_dirs += ["//include/qapi", "net/src"]
+        sources += [
+            "net/src/httpc_demo.c",
+        ]
+    }
+
+    if (CONFIG_HTTP_SERVER_DEMO) {    
+        include_dirs += ["//include/qapi", "net/src"]
+        sources += [
+            "net/src/httpd_demo.c",
+        ]
+    }
+
+    if (CONFIG_RNG_TEST) {
+        sources += ["platform/rng_shell.c"]
+    }
+
+    if (CONFIG_MQTT_CLIENT_DEMO) {
+        include_dirs += ["//modules/net/mqtt_client"]
+    }
+
+    if (CONFIG_SNTP_CLIENT) { 
+        sources += ["//modules/net/sntp/sntp.c",]
+    }
+
+    if (CONFIG_SECUREFS_DEMO) {
+        include_dirs += ["//modules/fs", "//demo/common/securefs"]
+        sources += [
+            "//demo/common/securefs/securefs_demo.c",
+            "//demo/common/securefs/securefs.c",
+        ]
+    }
+}

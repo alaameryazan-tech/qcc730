@@ -1,0 +1,6 @@
+mainmenu "Fermion Kconfig"
+
+source "boards/Kconfig"
+source "soc/Kconfig"
+source "lib/Kconfig"
+source "modules/Kconfig"

@@ -1,0 +1,1685 @@
+<!--  Copyright (c) 2024 Qualcomm Innovation Center, Inc. All rights reserved.  -->
+<!--    %%version  -->
+<metadata_list xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="HydraMeta.xsd">
+<!--  App  -->
+<!--  TODO: derive the name and number from system.xml  -->
+<metadata subsystem_name="wlan" subsystem_alias="wlan" subsystem_id="2" version="0">
+
+<config_element name="NT_DEVCFG_LFS_REG_TYPE" psid="1">
+<label> NT_DEVCFG_LFS_REG_TYPE </label>
+<description_user>default-logger type reg </description_user>
+<type>uint32</type>
+<default> 1 </default>
+<range_min>1</range_min>
+<range_max>2</range_max>
+<is_internal>true</is_internal>
+</config_element>
+
+<config_element name="NT_DEVCFG_LFS_REG_SIZE" psid="2">
+<label> NT_DEVCFG_LFS_REG_SIZE </label>
+<description_user>default-logger type reg size </description_user>
+<type>uint32</type>
+<default> 0 </default>
+</config_element>
+
+<config_element name="NT_DEVCFG_LFS_NAME" psid="3">
+<label> NT_DEVCFG_LFS_NAME </label>
+<description_user>default-logger lfs file name </description_user>
+<type>uint32</type>
+<default>0xCC</default>
+</config_element>
+
+<config_element name="NT_DEVCFG_DEFAULT_LOG_LVL" psid="4">
+<label> NT_DEVCFG_DEFAULT_LOG_LVL </label>
+<description_user>default log level </description_user>
+<type>uint32</type>
+<default> 2 </default>
+<range_min>0</range_min>
+<range_max>3</range_max>
+</config_element>
+
+<config_element name="NT_DEVCFG_DEFAULT_HALPHY_LOG_LVL" psid="5">
+<label> NT_DEVCFG_DEFAULT_HALPHY_LOG_LVL </label>
+<description_user>default halphy log level </description_user>
+<type>uint32</type>
+<default> 1 </default>
+<range_min>0</range_min>
+<range_max>3</range_max>
+</config_element>
+
+<config_element name="NT_DEVCFG_DEFAULT_LOG_BMAP" psid="6">
+<label> NT_DEVCFG_DEFAULT_LOG_BMAP </label>
+<description_user>Default bitmap value for FDI, ref: bitmap fdi.h </description_user>
+<type>uint32</type>
+<default>0</default>
+</config_element>
+
+<config_element name="NT_DEVCFG_INDEF_DEEP_SLEEP_EN" psid="7">
+<label> NT_DEVCFG_INDEF_DEEP_SLEEP_EN </label>
+<description_user>Switch between Deep Sleep or Indefinite Deep Sleep </description_user>
+<type>uint32</type>
+<default> 0 </default>
+</config_element>
+
+<config_element name="NT_DEVCFG_PERIODIC_WAKE_IDLE_TIMEOUT_US" psid="8">
+<label> NT_DEVCFG_PERIODIC_WAKE_IDLE_TIMEOUT_US </label>
+<description_user>To set the idle timer timeout for period wake infra </description_user>
+<type>uint32</type>
+<default> 5000 </default>
+</config_element>
+
+<config_element name="NT_DEVCFG_PERIODIC_WAKE_ITO_STEPS" psid="9">
+<label> NT_DEVCFG_PERIODIC_WAKE_ITO_STEPS </label>
+<description_user>To set the ITO for period wake infra </description_user>
+<type>uint32</type>
+<default> 4 </default>
+</config_element>
+
+<config_element name="NT_DEVCFG_PERIODIC_WAKE_START_TIME_MS" psid="10">
+<label> NT_DEVCFG_PERIODIC_WAKE_START_TIME_MS </label>
+<description_user>To set the period traffic start time </description_user>
+<type>uint32</type>
+<default> 200 </default>
+</config_element>
+
+<config_element name="NT_DEVCFG_PERIODIC_WAKE_IDLE_MODE_WAKE_TIME_MS" psid="11">
+<label> NT_DEVCFG_PERIODIC_WAKE_IDLE_MODE_WAKE_TIME_MS </label>
+<description_user>To set the idle mode wake time in periodic wake infra </description_user>
+<type>uint32</type>
+<default> 500 </default>
+</config_element>
+
+<config_element name="NT_DEVCFG_ADAPTIVE_ITO_FEATURE_ENABLE" psid="12">
+<label> NT_DEVCFG_ADAPTIVE_ITO_FEATURE_ENABLE </label>
+<description_user>To enable adaptive ito feature: 0-disable, 1-enable </description_user>
+<type>uint32</type>
+<default> 0 </default>
+<range_min>0</range_min>
+<range_max>1</range_max>
+</config_element>
+
+<config_element name="NT_DEVCFG_SPECULATIVE_WAKE_FEATURE_ENABLE" psid="13">
+<label> NT_DEVCFG_SPECULATIVE_WAKE_FEATURE_ENABLE </label>
+<description_user>To enable speculative wake feature: 0-disable, 1-enable </description_user>
+<type>uint32</type>
+<default> 0 </default>
+<range_min>0</range_min>
+<range_max>1</range_max>
+</config_element>
+
+<config_element name="NT_DEVCFG_CHAN_COEFF" psid="14">
+<label> NT_DEVCFG_CHAN_COEFF </label>
+<description_user>channel activity filter co-efficient(0-10) </description_user>
+<type>uint32</type>
+<default> 9 </default>
+<range_min>0</range_min>
+<range_max>10</range_max>
+</config_element>
+
+<config_element name="NT_DEVCFG_CHAN_STATS_ROUND_OFF_CONST" psid="15">
+<label> NT_DEVCFG_CHAN_STATS_ROUND_OFF_CONST </label>
+<description_user>channel activity round off constant(0-10) </description_user>
+<type>uint32</type>
+<default> 10 </default>
+<range_min>0</range_min>
+<range_max>10</range_max>
+</config_element>
+
+<config_element name="NT_DEVCFG_SPECULATIVE_WAKE_TIME_MS" psid="16">
+<label> NT_DEVCFG_SPECULATIVE_WAKE_TIME_MS </label>
+<description_user>Mid point wake up time(in ms) </description_user>
+<type>uint32</type>
+<default> 500 </default>
+<range_min>0</range_min>
+<range_max>2000</range_max>
+</config_element>
+
+<config_element name="NT_DEVCFG_BMU_ERROR_RECOVERY_ENABLED" psid="17">
+<label> NT_DEVCFG_BMU_ERROR_RECOVERY_ENABLED </label>
+<description_user>To enable or disable BMU error recovery, 1 - recovery enabled 0 - recovery disabled </description_user>
+<type>uint32</type>
+<default> 1 </default>
+<range_min>0</range_min>
+<range_max>1</range_max>
+</config_element>
+
+<config_element name="NT_DEVCFG_FG_SCAN_PROBE_TYPE" psid="18">
+<label> NT_DEVCFG_FG_SCAN_PROBE_TYPE </label>
+<description_user>default foreground probe_type_active(1)/passive(2) </description_user>
+<type>uint32</type>
+<default> 1 </default>
+<range_min>1</range_min>
+<range_max>2</range_max>
+</config_element>
+
+<config_element name="NT_DEVCFG_VALUE_FG_SSID_SCAN_TYPE" psid="19">
+<label> NT_DEVCFG_VALUE_FG_SSID_SCAN_TYPE </label>
+<description_user>scan-type to scan all ssids(0)/specific ssid(1) </description_user>
+<type>uint32</type>
+<default> 0 </default>
+</config_element>
+
+<config_element name="NT_DEVCFG_NUM_CHANNELS_SCANNED" psid="20">
+<label> NT_DEVCFG_NUM_CHANNELS_SCANNED </label>
+<description_user>no of channels to be scanned by default is one </description_user>
+<type>uint32</type>
+<default> 11 </default>
+</config_element>
+
+<config_element name="NT_DEVCFG_ACTIVE_CHANNEL_DWELL_TIME" psid="21">
+<label> NT_DEVCFG_ACTIVE_CHANNEL_DWELL_TIME </label>
+<description_user>default active scan durartion </description_user>
+<type>uint32</type>
+<default> 60 </default>
+<range_min>60</range_min>
+<range_max>80</range_max>
+</config_element>
+
+<config_element name="NT_DEVCFG_PASSIVE_CHANNEL_DWELL_TIME" psid="22">
+<label> NT_DEVCFG_PASSIVE_CHANNEL_DWELL_TIME </label>
+<description_user>default passive scan durartion </description_user>
+<type>uint32</type>
+<default> 130 </default>
+<range_min>130</range_min>
+<range_max>150</range_max>
+</config_element>
+
+<config_element name="NT_DEVCFG_RSSI_MIN_THRESH_DEFAULT" psid="23">
+<label> NT_DEVCFG_RSSI_MIN_THRESH_DEFAULT </label>
+<description_user>default minimum threshold value of RSSI </description_user>
+<type>uint32</type>
+<default> 60 </default>
+</config_element>
+
+<config_element name="NT_DEVCFG_RSSI_MAX_THRESH_DEFAULT" psid="24">
+<label> NT_DEVCFG_RSSI_MAX_THRESH_DEFAULT </label>
+<description_user>default maximum threshold value of RSSI </description_user>
+<type>uint32</type>
+<default> 120 </default>
+</config_element>
+
+<config_element name="NT_DEVCFG_RATE_MIN_THRESH_DEFAULT" psid="25">
+<label> NT_DEVCFG_RATE_MIN_THRESH_DEFAULT </label>
+<description_user>default minimum threshold rate </description_user>
+<type>uint32</type>
+<default> 16 </default>
+</config_element>
+
+<config_element name="NT_DEVCFG_RATE_MAX_THRESH_DEFAULT" psid="26">
+<label> NT_DEVCFG_RATE_MAX_THRESH_DEFAULT </label>
+<description_user>default maximum threshold rate </description_user>
+<type>uint32</type>
+<default> 18 </default>
+</config_element>
+
+<config_element name="NT_DEVCFG_FOREGROUND_SCAN_TYPE" psid="27">
+<label> NT_DEVCFG_FOREGROUND_SCAN_TYPE </label>
+<description_user>type of foreground scan implicit(0)/explicit(1) </description_user>
+<type>uint32</type>
+<default> 1 </default>
+</config_element>
+
+<config_element name="NT_DEVCFG_VALUE_IMP_SSID_SCAN_TYPE" psid="28">
+<label> NT_DEVCFG_VALUE_IMP_SSID_SCAN_TYPE </label>
+<description_user>scan-type to scan all ssids(0)/specific ssid(1) </description_user>
+<type>uint32</type>
+<default> 0 </default>
+</config_element>
+
+<config_element name="NT_DEVCFG_BG_SCAN_STATUS" psid="29">
+<label> NT_DEVCFG_BG_SCAN_STATUS </label>
+<description_user>default background scan status enabled/disabled </description_user>
+<type>uint32</type>
+<default> 0 </default>
+<range_min>0</range_min>
+<range_max>1</range_max>
+</config_element>
+
+<config_element name="NT_DEVCFG_BG_PROBE_TYPE" psid="30">
+<label> NT_DEVCFG_BG_PROBE_TYPE </label>
+<description_user>default background probe_type_active(1)/passive(2) </description_user>
+<type>uint32</type>
+<default> 1 </default>
+<range_min>1</range_min>
+<range_max>2</range_max>
+</config_element>
+
+<config_element name="NT_DEVCFG_BG_SCAN_DURATION" psid="31">
+<label> NT_DEVCFG_BG_SCAN_DURATION </label>
+<description_user>default-time-period-bg-scan_time period for bg scan </description_user>
+<type>uint32</type>
+<default> 30 </default>
+</config_element>
+
+<config_element name="NT_DEVCFG_BG_FULL_SCAN_FREQ" psid="32">
+<label> NT_DEVCFG_BG_FULL_SCAN_FREQ </label>
+<description_user>background full scan frequency </description_user>
+<type>uint32</type>
+<default> 5 </default>
+</config_element>
+
+<config_element name="NT_DEVCFG_BG_SCAN_TRIGGER" psid="33">
+<label> NT_DEVCFG_BG_SCAN_TRIGGER </label>
+<description_user>background scan triger rssi(1)/rate(2)/periodic(3)/mixed(4) </description_user>
+<type>uint32</type>
+<default> 3 </default>
+<range_min>1</range_min>
+<range_max>4</range_max>
+</config_element>
+
+<config_element name="NT_DEVCFG_WPS_CHANNEL_DWELL_TIME" psid="34">
+<label> NT_DEVCFG_WPS_CHANNEL_DWELL_TIME </label>
+<description_user>default WPS scan durartion </description_user>
+<type>uint32</type>
+<default> 130 </default>
+<range_min>130</range_min>
+<range_max>130</range_max>
+</config_element>
+
+<config_element name="NT_DEVCFG_INTVAL" psid="35">
+<label> NT_DEVCFG_INTVAL </label>
+<description_user>default-beacon interval,256 </description_user>
+<type>uint32</type>
+<default> 100 </default>
+<range_min>1</range_min>
+<range_max>100</range_max>
+<is_internal>true</is_internal>
+</config_element>
+
+<config_element name="NT_DEVCFG_TXPOWER" psid="36">
+<label> NT_DEVCFG_TXPOWER </label>
+<description_user>default-beacon interval-ns </description_user>
+<type>uint32</type>
+<default> 0 </default>
+<range_min>0</range_min>
+<range_max>0</range_max>
+</config_element>
+
+<config_element name="NT_DEVCFG_DTIM_COUNT" psid="37">
+<label> NT_DEVCFG_DTIM_COUNT </label>
+<description_user>default-ap dtim count </description_user>
+<type>uint32</type>
+<default> 0 </default>
+<range_min>0</range_min>
+<range_max>0</range_max>
+</config_element>
+
+<config_element name="NT_DEVCFG_AP_DTIM_PERIOD" psid="38">
+<label> NT_DEVCFG_AP_DTIM_PERIOD </label>
+<description_user>default-dtim period </description_user>
+<type>uint32</type>
+<default> 2 </default>
+<range_min>2</range_min>
+<range_max>2</range_max>
+</config_element>
+
+<config_element name="NT_DEVCFG_BMPS_ENABLE " psid="39">
+<label> NT_DEVCFG_BMPS_ENABLE  </label>
+<description_user>Enable/Disable BMPS feature  </description_user>
+<type>uint32</type>
+<default> 0 </default>
+<range_min>0</range_min>
+<range_max>1</range_max>
+</config_element>
+
+<config_element name="NT_DEVCFG_INITITAL_BMPS_IDLE_PERIOD_MS" psid="40">
+<label> NT_DEVCFG_INITITAL_BMPS_IDLE_PERIOD_MS </label>
+<description_user>Initial interval of bmps idle timer. config NT_DEVCFG_BMPS_IDLE_TIMER_PERIOD_MS to set idle time of follow on intervals </description_user>
+<type>uint32</type>
+<default> 100 </default>
+<range_min>100</range_min>
+<range_max>20000</range_max>
+</config_element>
+
+<config_element name="NT_DEVCFG_IMPS_ENABLE " psid="41">
+<label> NT_DEVCFG_IMPS_ENABLE  </label>
+<description_user>Enable/Disable IMPS feature  </description_user>
+<type>uint32</type>
+<default> 0 </default>
+<range_min>0</range_min>
+<range_max>1</range_max>
+</config_element>
+
+<config_element name="NT_DEVCFG_FORCE_DTIM" psid="42">
+<label> NT_DEVCFG_FORCE_DTIM </label>
+<description_user>Force DTIM value config from STA. If value greater than 0, It will replace the actual DTIM value. </description_user>
+<type>uint32</type>
+<default> 0 </default>
+<range_min>0</range_min>
+<range_max>0</range_max>
+</config_element>
+
+<config_element name="NT_DEVCFG_IMPS_SLEEP_TIMER " psid="43">
+<label> NT_DEVCFG_IMPS_SLEEP_TIMER  </label>
+<description_user>default imps sleep time  </description_user>
+<type>uint32</type>
+<default> 30000 </default>
+<range_min>30000</range_min>
+<range_max>30000</range_max>
+</config_element>
+
+<config_element name="NT_DEVCFG_MIN_WAKE_TIME " psid="44">
+<label> NT_DEVCFG_MIN_WAKE_TIME  </label>
+<description_user>default MIN WAKE TIME before enter to power save </description_user>
+<type>uint32</type>
+<default> 5 </default>
+<range_min>5</range_min>
+<range_max>5</range_max>
+</config_element>
+
+<config_element name="NT_DEVCFG_BSS_MAX_IDLE_TIMER " psid="45">
+<label> NT_DEVCFG_BSS_MAX_IDLE_TIMER  </label>
+<description_user>default bss max idle time  </description_user>
+<type>uint32</type>
+<default> 180 </default>
+<range_min>180</range_min>
+<range_max>180</range_max>
+</config_element>
+
+<config_element name="NT_DEVCFG_WNM_SLEEP_TIMER " psid="46">
+<label> NT_DEVCFG_WNM_SLEEP_TIMER  </label>
+<description_user>default wnm sleep time  </description_user>
+<type>uint32</type>
+<default> 10000 </default>
+<range_min>10000</range_min>
+<range_max>10000</range_max>
+</config_element>
+
+<config_element name="NT_DEVCFG_WUR_ENABLE " psid="47">
+<label> NT_DEVCFG_WUR_ENABLE  </label>
+<description_user>Enable/Disable WUR feature  </description_user>
+<type>uint32</type>
+<default> 0 </default>
+<range_min>0</range_min>
+<range_max>0</range_max>
+</config_element>
+
+<config_element name="NT_DEVCFG_WUR_SERVICE_PERIOD" psid="48">
+<label> NT_DEVCFG_WUR_SERVICE_PERIOD </label>
+<description_user>set wur service period  </description_user>
+<type>uint32</type>
+<default> 2 </default>
+<range_min>2</range_min>
+<range_max>2</range_max>
+</config_element>
+
+<config_element name="NT_DEVCFG_WUR_SERVICE_INTERVAL " psid="49">
+<label> NT_DEVCFG_WUR_SERVICE_INTERVAL  </label>
+<description_user>set wur service interval </description_user>
+<type>uint32</type>
+<default> 5000 </default>
+</config_element>
+
+<config_element name="NT_DEVCFG_WUR_BEACON_PERIOD " psid="50">
+<label> NT_DEVCFG_WUR_BEACON_PERIOD  </label>
+<description_user> set wur beacon period </description_user>
+<type>uint32</type>
+<default> 5000 </default>
+<range_min>5000</range_min>
+<range_max>5000</range_max>
+</config_element>
+
+<config_element name="NT_DEVCFG_WUR_BEACON_OFFSET " psid="51">
+<label> NT_DEVCFG_WUR_BEACON_OFFSET  </label>
+<description_user>set wur beacon offset  </description_user>
+<type>uint32</type>
+<default> 20 </default>
+<range_min>20</range_min>
+<range_max>20</range_max>
+</config_element>
+
+<config_element name="NT_DEVCFG_WAKEUP_FRAME_AT_DATA_AVAILABILITY " psid="52">
+<label> NT_DEVCFG_WAKEUP_FRAME_AT_DATA_AVAILABILITY  </label>
+<description_user>wakeup frame at data availablitiy  </description_user>
+<type>uint32</type>
+<default> 1 </default>
+</config_element>
+
+<config_element name="NT_DEVCFG_SUSPEND_FRAME_AT_DATA_AVAILABILITY " psid="53">
+<label> NT_DEVCFG_SUSPEND_FRAME_AT_DATA_AVAILABILITY  </label>
+<description_user>suspend frame at data availablitiy  </description_user>
+<type>uint32</type>
+<default> 1 </default>
+</config_element>
+
+<config_element name="NT_DEVCFG_BMPS_IDLE_TIMER_PERIOD_MS" psid="54">
+<label> NT_DEVCFG_BMPS_IDLE_TIMER_PERIOD_MS </label>
+<description_user>The interval of BMPS idle timer, which will take effect from second idle duration </description_user>
+<type>uint32</type>
+<default>20</default>
+<range_min>5</range_min>
+<range_max>20000</range_max>
+</config_element>
+
+<config_element name="NT_DEVCFG_SUSPEND_FRAME_IF_WAKEUP_FRAME_RECEIVED " psid="55">
+<label> NT_DEVCFG_SUSPEND_FRAME_IF_WAKEUP_FRAME_RECEIVED  </label>
+<description_user>suspend frame if wakeup frame is received </description_user>
+<type>uint32</type>
+<default> 1 </default>
+</config_element>
+
+<config_element name="NT_DEVCFG_WUR_SOFT_DTIM_ENABLE" psid="56">
+<label> NT_DEVCFG_WUR_SOFT_DTIM_ENABLE </label>
+<description_user>enable/disable wur software dtim </description_user>
+<type>uint32</type>
+<default> 1 </default>
+<range_min>1</range_min>
+<range_max>1</range_max>
+</config_element>
+
+<config_element name="NT_DEVCFG_BASE_EARLY_RX_US" psid="57">
+<label> NT_DEVCFG_BASE_EARLY_RX_US </label>
+<description_user>Base early RX time for beacon reception </description_user>
+<type>uint32</type>
+<default> 100 </default>
+<range_min>100</range_min>
+<range_max>4000</range_max>
+</config_element>
+
+<config_element name="NT_DEVCFG_BASE_BEACON_WAIT_TIME_US" psid="58">
+<label> NT_DEVCFG_BASE_BEACON_WAIT_TIME_US </label>
+<description_user>Base beacon wait time for beacon reception in power save </description_user>
+<type>uint32</type>
+<default> 11000 </default>
+<range_min>10000</range_min>
+<range_max>25000</range_max>
+</config_element>
+
+<config_element name="NT_DEVCFG_BEACON_WAIT_INC_STEP_US" psid="59">
+<label> NT_DEVCFG_BEACON_WAIT_INC_STEP_US </label>
+<description_user>Telescopic beacon wait increment step </description_user>
+<type>uint32</type>
+<default> 2000 </default>
+<range_min>0</range_min>
+<range_max>4000</range_max>
+</config_element>
+
+<config_element name="NT_DEVCFG_EARLY_RX_STEP_US" psid="60">
+<label> NT_DEVCFG_EARLY_RX_STEP_US </label>
+<description_user>Telescopic early rx increment step </description_user>
+<type>uint32</type>
+<default> 200 </default>
+<range_min>0</range_min>
+<range_max>10000</range_max>
+</config_element>
+
+<config_element name="NT_DEVCFG_NO_OF_ACCEPTABLE_BEACON_MISS" psid="61">
+<label> NT_DEVCFG_NO_OF_ACCEPTABLE_BEACON_MISS </label>
+<description_user>number of acceptable beacon miss </description_user>
+<type>uint32</type>
+<default> 15 </default>
+<range_min>15</range_min>
+<range_max>15</range_max>
+</config_element>
+
+<config_element name="NT_DEVCFG_WNM_DTIM_CONFIG" psid="62">
+<label> NT_DEVCFG_WNM_DTIM_CONFIG </label>
+<description_user>WNM dtim sleep enable/disable/auto(enable/disable depending on proxy arp support on ap)  </description_user>
+<type>uint32</type>
+<default> 2 </default>
+<range_min>2</range_min>
+<range_max>2</range_max>
+</config_element>
+
+<config_element name="NT_DEVCFG_MINIMUM_SLEEP_TIME_FOR_AON" psid="63">
+<label> NT_DEVCFG_MINIMUM_SLEEP_TIME_FOR_AON </label>
+<description_user>Configure minimum sleep time for AON </description_user>
+<type>uint32</type>
+<default> 20 </default>
+<range_min>20</range_min>
+<range_max>20</range_max>
+</config_element>
+
+<config_element name="NT_DEVCFG_SLEEP_CLOCK_SELECTION_FOR_AON" psid="64">
+<label> NT_DEVCFG_SLEEP_CLOCK_SELECTION_FOR_AON </label>
+<description_user>To select sleep clock for AON; select 0 for RC from PMIC, select 1 for XO from RFA and select 2 for XO from PMIC </description_user>
+<type>uint32</type>
+<default>0 </default>
+<range_min>0</range_min>
+<range_max>2</range_max>
+</config_element>
+
+<config_element name="NT_DEVGFG_THRESHOLD_WARNING_VOLTAGE_CONFIG" psid="65">
+<label> NT_DEVGFG_THRESHOLD_WARNING_VOLTAGE_CONFIG </label>
+<description_user>To configure the threshold voltage level,to have a warning of low voltage </description_user>
+<type>uint32</type>
+<default>0xDD</default>
+</config_element>
+
+<config_element name="NT_DEVCFG_SYSMON_TASK_PERIODICITY_CONFIG" psid="66">
+<label> NT_DEVCFG_SYSMON_TASK_PERIODICITY_CONFIG </label>
+<description_user>To configure the periodicity of sysmon task </description_user>
+<type>uint32</type>
+<default> 60000 </default>
+</config_element>
+
+<config_element name="NT_DEVCFG_ACCEPTABLE_TX_COUNT" psid="67">
+<label> NT_DEVCFG_ACCEPTABLE_TX_COUNT </label>
+<description_user>To configure acceptale tx count in a idle period </description_user>
+<type>uint32</type>
+<default> 10 </default>
+</config_element>
+
+<config_element name="NT_DEVCFG_ACCEPTABLE_RX_COUNT" psid="68">
+<label> NT_DEVCFG_ACCEPTABLE_RX_COUNT </label>
+<description_user>To configure acceptale rx count in a idle period </description_user>
+<type>uint32</type>
+<default> 10 </default>
+</config_element>
+
+<config_element name="NT_DEVCFG_NO_WAKE_COUNT" psid="69">
+<label> NT_DEVCFG_NO_WAKE_COUNT </label>
+<description_user>after configured beacon receiption STA will exit sleep then go back to sleep </description_user>
+<type>uint32</type>
+<default> 0 </default>
+</config_element>
+
+<config_element name="NT_DEVCFG_F2A_ASSERT_TIMEOUT_MS" psid="70">
+<label> NT_DEVCFG_F2A_ASSERT_TIMEOUT_MS </label>
+<description_user>Timeout in us, for Aria to assert A2F in response to F2A assertion </description_user>
+<type>uint32</type>
+<default> 10 </default>
+<range_min>10</range_min>
+<range_max>10</range_max>
+</config_element>
+
+<config_element name="NT_DEVCFG_INTER_F2A_INTERVAL_US" psid="71">
+<label> NT_DEVCFG_INTER_F2A_INTERVAL_US </label>
+<description_user>Minimum time in us, between F2A deassertion and subsequent F2A pulse </description_user>
+<type>uint32</type>
+<default> 2 </default>
+<range_min>2</range_min>
+<range_max>2</range_max>
+</config_element>
+
+<config_element name="NT_DEVCFG_F2A_PULSE_DURATION_US" psid="72">
+<label> NT_DEVCFG_F2A_PULSE_DURATION_US </label>
+<description_user>Duration of F2A pulse in us </description_user>
+<type>uint32</type>
+<default> 20 </default>
+<range_min>20</range_min>
+<range_max>20</range_max>
+</config_element>
+
+<config_element name="NT_DEVCFG_SOCPM_ENABLE" psid="73">
+<label> NT_DEVCFG_SOCPM_ENABLE </label>
+<description_user>Configure socpm state </description_user>
+<type>uint32</type>
+<default> 1 </default>
+<range_min>0</range_min>
+<range_max>1</range_max>
+</config_element>
+
+<config_element name="NT_DEVCFG_BEACON_MISS_THR_TIME_US" psid="74">
+<label> NT_DEVCFG_BEACON_MISS_THR_TIME_US </label>
+<description_user>To configure beacon miss threshold time in us </description_user>
+<type>uint32</type>
+<default> 5000000 </default>
+<range_min>1000000</range_min>
+<range_max>20000000</range_max>
+</config_element>
+
+<config_element name="NT_DEVCFG_CONNECTION_WAIT_TIME_MS" psid="75">
+<label> NT_DEVCFG_CONNECTION_WAIT_TIME_MS </label>
+<description_user>time to wait for wifi connection after Power ON boot up </description_user>
+<type>uint32</type>
+<default> 30000 </default>
+</config_element>
+
+<config_element name="NT_DEVCFG_RECONNECTION_WAIT_TIME_MS" psid="76">
+<label> NT_DEVCFG_RECONNECTION_WAIT_TIME_MS </label>
+<description_user>time to wait for wifi reconnection after disconnection </description_user>
+<type>uint32</type>
+<default> 20000 </default>
+</config_element>
+
+<config_element name="NT_DEVCFG_WMI_COMMAND_PROCESS_TIME_MS" psid="77">
+<label> NT_DEVCFG_WMI_COMMAND_PROCESS_TIME_MS </label>
+<description_user>time taken to process WMI commands excluding scan and join cmd </description_user>
+<type>uint32</type>
+<default> 5000 </default>
+</config_element>
+
+<config_element name="NT_DEVCFG_SLP_CLK_CAL_POLL_TIMER_PERIOD_MS" psid="78">
+<label> NT_DEVCFG_SLP_CLK_CAL_POLL_TIMER_PERIOD_MS </label>
+<description_user>periodicity of sleep clock calibration poll timer in ms </description_user>
+<type>uint32</type>
+<default> 10000 </default>
+</config_element>
+
+<config_element name="NT_DEVCFG_NUM_BMPS_IDLE_INTERVALS" psid="79">
+<label> NT_DEVCFG_NUM_BMPS_IDLE_INTERVALS </label>
+<description_user>Number of consecutive idle intervals for entry to BMPS </description_user>
+<type>uint32</type>
+<default> 1 </default>
+<range_min>1</range_min>
+<range_max>255</range_max>
+</config_element>
+
+<config_element name="NT_DEVCFG_SLP_MODE_SLP_CLK_CAL_ENABLE" psid="80">
+<label> NT_DEVCFG_SLP_MODE_SLP_CLK_CAL_ENABLE </label>
+<description_user>Enable Sleep Mode Sleep Clock Calibration </description_user>
+<type>uint32</type>
+<default> 0 </default>
+<range_min>0</range_min>
+<range_max>1</range_max>
+<is_internal>true</is_internal>
+</config_element>
+
+<config_element name="NT_DEVCFG_NON_POLLED_RRI_ENABLE" psid="81">
+<label> NT_DEVCFG_NON_POLLED_RRI_ENABLE </label>
+<description_user>Enable non-polled RRI restoration </description_user>
+<type>uint32</type>
+<default> 1 </default>
+<range_min>0</range_min>
+<range_max>1</range_max>
+<is_internal>true</is_internal>
+</config_element>
+
+<config_element name="NT_DEVCFG_HDM_TRIGGERED_RRI_ENABLE" psid="82">
+<label> NT_DEVCFG_HDM_TRIGGERED_RRI_ENABLE </label>
+<description_user>Enable HDM triggered RRI restoration </description_user>
+<type>uint32</type>
+<default> 1 </default>
+<range_min>0</range_min>
+<range_max>1</range_max>
+<is_internal>true</is_internal>
+</config_element>
+
+<config_element name="NT_DEVCFG_SLP_SLOP_INTERVAL_MS" psid="83">
+<label> NT_DEVCFG_SLP_SLOP_INTERVAL_MS </label>
+<description_user>Granular interval of time to account for sleep slop offset </description_user>
+<type>uint32</type>
+<default> 100 </default>
+<range_min>100</range_min>
+<range_max>200</range_max>
+<is_internal>true</is_internal>
+</config_element>
+
+<config_element name="NT_DEVCFG_SLP_SLOP_STEP_US" psid="84">
+<label> NT_DEVCFG_SLP_SLOP_STEP_US </label>
+<description_user>Slop time to be accounted for per interval time </description_user>
+<type>uint32</type>
+<default> 100 </default>
+<range_min>0</range_min>
+<range_max>100</range_max>
+<is_internal>true</is_internal>
+</config_element>
+
+<config_element name="NT_DEVCFG_RE_ENTER_BMPS_DELAY_MS" psid="85">
+<label> NT_DEVCFG_RE_ENTER_BMPS_DELAY_MS </label>
+<description_user>Delation in ms for re-enter bmps </description_user>
+<type>uint32</type>
+<default> 40 </default>
+<range_min>40</range_min>
+<range_max>100</range_max>
+</config_element>
+
+<config_element name="NT_DEVCFG_TWT_ENABLE" psid="86">
+<label> NT_DEVCFG_TWT_ENABLE </label>
+<description_user>enable/disable TWT feature </description_user>
+<type>uint32</type>
+<default> 0 </default>
+<range_min>0</range_min>
+<range_max>1</range_max>
+</config_element>
+
+<config_element name="NT_DEVCFG_TWT_DTIM_CONFIG " psid="87">
+<label> NT_DEVCFG_TWT_DTIM_CONFIG  </label>
+<description_user>twt dtim sleep enable/disable/auto(enable/disable depending on proxy arp support on ap) </description_user>
+<type>uint32</type>
+<default> 0 </default>
+<range_min>0</range_min>
+<range_max>2</range_max>
+</config_element>
+
+<config_element name="NT_DEVCFG_TWT_ALIGNMENT_CONFIG " psid="88">
+<label> NT_DEVCFG_TWT_ALIGNMENT_CONFIG  </label>
+<description_user>to configure twt alignment  </description_user>
+<type>uint32</type>
+<default> 120 </default>
+<range_min>120</range_min>
+<range_max>120</range_max>
+</config_element>
+
+<config_element name="NT_DEVCFG_TWT_WAKEUP_INTERVAL_LO" psid="89">
+<label> NT_DEVCFG_TWT_WAKEUP_INTERVAL_LO </label>
+<description_user>TWT wake interval lower32 bit </description_user>
+<type>uint32</type>
+<default>0x00002ee0</default>
+<range_min>12000</range_min>
+<range_max>12000</range_max>
+</config_element>
+
+<config_element name="NT_DEVCFG_TWT_MIN_WAKEUP_DURATION" psid="90">
+<label> NT_DEVCFG_TWT_MIN_WAKEUP_DURATION </label>
+<description_user>TWT wakeup time </description_user>
+<type>uint32</type>
+<default> 250 </default>
+<range_min>250</range_min>
+<range_max>250</range_max>
+</config_element>
+
+<config_element name="NT_DEVCFG_TWT_BROADCAST" psid="91">
+<label> NT_DEVCFG_TWT_BROADCAST </label>
+<description_user>TWT Broadcast mode </description_user>
+<type>uint32</type>
+<default> 0 </default>
+</config_element>
+
+<config_element name="NT_DEVCFG_TWT_WAKEUP_INTERVAL_HI" psid="92">
+<label> NT_DEVCFG_TWT_WAKEUP_INTERVAL_HI </label>
+<description_user>TWT wake interval higherer32 bit </description_user>
+<type>uint32</type>
+<default>0</default>
+<range_min>0</range_min>
+<range_max>0</range_max>
+</config_element>
+
+<config_element name="NT_DEVCFG_TWT_WAKEUP_TYPE" psid="93">
+<label> NT_DEVCFG_TWT_WAKEUP_TYPE </label>
+<description_user>to set the twt wake up periodically or without period,1 signifies periodic / implicit,0 signifies aperiodic / explicit </description_user>
+<type>uint32</type>
+<default> 0 </default>
+<range_min>0</range_min>
+<range_max>1</range_max>
+</config_element>
+
+<config_element name="NT_DEV_CFG_TWT_FLOW_TYPE" psid="94">
+<label> NT_DEV_CFG_TWT_FLOW_TYPE </label>
+<description_user>to set the twt flow that is announced or unannounced,1 signifies unannounced, 0 signifies announced </description_user>
+<type>uint32</type>
+<default> 1 </default>
+<range_min>0</range_min>
+<range_max>1</range_max>
+</config_element>
+
+<config_element name="NT_DEVCFG_TWT_WIFI_FW_ENABLE " psid="95">
+<label> NT_DEVCFG_TWT_WIFI_FW_ENABLE  </label>
+<description_user>enable/disable TWT feature for WiFi FW  </description_user>
+<type>uint32</type>
+<default> 1 </default>
+<range_min>0</range_min>
+<range_max>1</range_max>
+</config_element>
+
+<config_element name="NT_DEVCFG_PROTECTION_MODE" psid="96">
+<label> NT_DEVCFG_PROTECTION_MODE </label>
+<description_user>protection mode </description_user>
+<type>uint32</type>
+<default> 1 </default>
+<range_min>0</range_min>
+<range_max>2</range_max>
+<is_internal>true</is_internal>
+</config_element>
+
+<config_element name="NT_DEVCFG_ONBOARDING_ENABLE" psid="97">
+<label> NT_DEVCFG_ONBOARDING_ENABLE </label>
+<description_user>enable/disable onboarding </description_user>
+<type>uint32</type>
+<default> 0 </default>
+<range_min>0</range_min>
+<range_max>1</range_max>
+</config_element>
+
+<config_element name="NT_DEVCFG_NETWORK_NAME" psid="98">
+<label> NT_DEVCFG_NETWORK_NAME </label>
+<description_user>default ssid name </description_user>
+<type>uint32</type>
+<default>0xedcba</default>
+</config_element>
+
+<config_element name="NT_DEVCFG_AUTH_TYPE" psid="99">
+<label> NT_DEVCFG_AUTH_TYPE </label>
+<description_user>Security type default is none </description_user>
+<type>uint32</type>
+<default> 0 </default>
+</config_element>
+
+<config_element name="NT_DEVCFG_DEVICE_MODE" psid="100">
+<label> NT_DEVCFG_DEVICE_MODE </label>
+<description_user>default device mode is STA </description_user>
+<type>uint32</type>
+<default> 0 </default>
+</config_element>
+
+<config_element name="NT_DEVCFG_RMF_ENABLE" psid="101">
+<label> NT_DEVCFG_RMF_ENABLE </label>
+<description_user>disable rmf(1)/enable rmf only with cap bits(2)/enable rmf only with req bits(3)/enable rmf only with cap and req bits(4) </description_user>
+<type>uint32</type>
+<default> 0 </default>
+<range_min>0</range_min>
+<range_max>0</range_max>
+</config_element>
+
+<config_element name="NT_DEVCFG_WEP_TYPE" psid="102">
+<label> NT_DEVCFG_WEP_TYPE </label>
+<description_user>wep type WEP40(1)/WEP104(2) </description_user>
+<type>uint32</type>
+<default> 1 </default>
+<range_min>1</range_min>
+<range_max>2</range_max>
+</config_element>
+
+<config_element name="NT_DEVCFG_WEP_KEY_LENGTH" psid="103">
+<label> NT_DEVCFG_WEP_KEY_LENGTH </label>
+<description_user>wep key length WEP40(5)/WEP104(13) </description_user>
+<type>uint32</type>
+<default> 5 </default>
+</config_element>
+
+<config_element name="NT_DEVCFG_AUTO_START_ENABLED" psid="104">
+<label> NT_DEVCFG_AUTO_START_ENABLED </label>
+<description_user>to enable(1)/disable(0)start_device automatically in onboarding/commissioning </description_user>
+<type>uint32</type>
+<default> 0 </default>
+<range_min>0</range_min>
+<range_max>1</range_max>
+</config_element>
+
+<config_element name="NT_DEVCFG_SERVER_DISABLE" psid="105">
+<label> NT_DEVCFG_SERVER_DISABLE </label>
+<description_user>to disable server while commissioning </description_user>
+<type>uint32</type>
+<default> 0 </default>
+</config_element>
+
+<config_element name="NT_DEVCFG_WIFIAPP_OMPS_SLEEP_TIME" psid="106">
+<label> NT_DEVCFG_WIFIAPP_OMPS_SLEEP_TIME </label>
+<description_user>default-omps sleep time </description_user>
+<type>uint32</type>
+<default> 15000 </default>
+</config_element>
+
+<config_element name="NT_DEVCFG_WIFIAPP_OMPS_IDLE_TIME" psid="107">
+<label> NT_DEVCFG_WIFIAPP_OMPS_IDLE_TIME </label>
+<description_user>default-omps idle time </description_user>
+<type>uint32</type>
+<default> 90000 </default>
+</config_element>
+
+<config_element name="NT_DEVCFG_WEP40_KEY_ID" psid="108">
+<label> NT_DEVCFG_WEP40_KEY_ID </label>
+<description_user>wep40 chosen key_id for connection  </description_user>
+<type>uint32</type>
+<default> 0 </default>
+</config_element>
+
+<config_element name="NT_DEVCFG_WEP40_STA_ID" psid="109">
+<label> NT_DEVCFG_WEP40_STA_ID </label>
+<description_user>chosen sta_id for AP for wep40 cnxn </description_user>
+<type>uint32</type>
+<default> 1 </default>
+</config_element>
+
+<config_element name="NT_DEVCFG_WEP40_KEY_STRING" psid="110">
+<label> NT_DEVCFG_WEP40_KEY_STRING </label>
+<description_user>key used for conxn using wep40 </description_user>
+<type>uint32</type>
+<default>0x12345</default>
+</config_element>
+
+<config_element name="NT_DEVCFG_WIFIAPP_OMPS_ENABLE" psid="111">
+<label> NT_DEVCFG_WIFIAPP_OMPS_ENABLE </label>
+<description_user>default-enalbe/disable omps </description_user>
+<type>uint32</type>
+<default> 1 </default>
+</config_element>
+
+<config_element name="NT_DEVCFG_WIFIAPP_ENABLEDISC" psid="112">
+<label> NT_DEVCFG_WIFIAPP_ENABLEDISC </label>
+<description_user>default-enable disc </description_user>
+<type>uint32</type>
+<default> 0 </default>
+</config_element>
+
+<config_element name="NT_DEVCFG_WIFIAPP_SERVICE_PERIOD" psid="113">
+<label> NT_DEVCFG_WIFIAPP_SERVICE_PERIOD </label>
+<description_user>default-service period </description_user>
+<type>uint32</type>
+<default> 2 </default>
+</config_element>
+
+<config_element name="NT_DEVCFG_WIFIAPP_SERVICE_INTERVAL" psid="114">
+<label> NT_DEVCFG_WIFIAPP_SERVICE_INTERVAL </label>
+<description_user>default-service interval </description_user>
+<type>uint32</type>
+<default> 1000 </default>
+</config_element>
+
+<config_element name="NT_DEVCFG_WIFIAPP_BECON_PERIOD" psid="115">
+<label> NT_DEVCFG_WIFIAPP_BECON_PERIOD </label>
+<description_user>default-becon period </description_user>
+<type>uint32</type>
+<default> 1000 </default>
+</config_element>
+
+<config_element name="NT_DEVCFG_WIFIAPP_BECON_OFFSET" psid="116">
+<label> NT_DEVCFG_WIFIAPP_BECON_OFFSET </label>
+<description_user>default-beacon offset </description_user>
+<type>uint32</type>
+<default> 50 </default>
+</config_element>
+
+<config_element name="NT_DEVCFG_WIFIAPP_BECON_CTS2S_ENABLE" psid="117">
+<label> NT_DEVCFG_WIFIAPP_BECON_CTS2S_ENABLE </label>
+<description_user>default-CTS2Senable </description_user>
+<type>uint32</type>
+<default> 0 </default>
+</config_element>
+
+<config_element name="NT_DEVCFG_WIFIAPP_CFEenable" psid="118">
+<label> NT_DEVCFG_WIFIAPP_CFEenable </label>
+<description_user>default-CFEenable </description_user>
+<type>uint32</type>
+<default> 0 </default>
+</config_element>
+
+<config_element name="NT_DEVCFG_WIFIAPP_WUR_MC_ENABLE" psid="119">
+<label> NT_DEVCFG_WIFIAPP_WUR_MC_ENABLE </label>
+<description_user>default-WUR_MC_ENABLE </description_user>
+<type>uint32</type>
+<default> 0 </default>
+</config_element>
+
+<config_element name="NT_DEVCFG_WIFIAPP_RESULT_STATUS_SUCCESS" psid="120">
+<label> NT_DEVCFG_WIFIAPP_RESULT_STATUS_SUCCESS </label>
+<description_user>resut status for success </description_user>
+<type>uint32</type>
+<default> 1 </default>
+</config_element>
+
+<config_element name="NT_DEVCFG_WIFIAPP_RESULT_STATUS_FAILURE" psid="121">
+<label> NT_DEVCFG_WIFIAPP_RESULT_STATUS_FAILURE </label>
+<description_user>resut status for failure </description_user>
+<type>uint32</type>
+<default> 0 </default>
+</config_element>
+
+<config_element name="NT_DEVCFG_IMPS_SLEEP_TIME" psid="122">
+<label> NT_DEVCFG_IMPS_SLEEP_TIME </label>
+<description_user>default duration of imps sleep time </description_user>
+<type>uint32</type>
+<default> 20000 </default>
+</config_element>
+
+<config_element name="NT_DEVCFG_IMPS_SLEEP_MODE" psid="123">
+<label> NT_DEVCFG_IMPS_SLEEP_MODE </label>
+<description_user>default imps sleep mode </description_user>
+<type>uint32</type>
+<default> 3 </default>
+</config_element>
+
+<config_element name="NT_DEVCFG_IMPS_RETRY_COUNT" psid="124">
+<label> NT_DEVCFG_IMPS_RETRY_COUNT </label>
+<description_user>default imps retry count value </description_user>
+<type>uint32</type>
+<default> 3 </default>
+</config_element>
+
+<config_element name="NT_DEVCFG_POWERSAVE_MODE_IMPS" psid="125">
+<label> NT_DEVCFG_POWERSAVE_MODE_IMPS </label>
+<description_user>powersave mode is imps </description_user>
+<type>uint32</type>
+<default> 1 </default>
+</config_element>
+
+<config_element name="NT_DEVCFG_POWERSAVE_MODE_BMPS" psid="126">
+<label> NT_DEVCFG_POWERSAVE_MODE_BMPS </label>
+<description_user>powersave mode is bmps </description_user>
+<type>uint32</type>
+<default> 2 </default>
+</config_element>
+
+<config_element name="NT_DEVCFG_POWERSAVE_ENABLED" psid="127">
+<label> NT_DEVCFG_POWERSAVE_ENABLED </label>
+<description_user>powersave enabled(1)/disabled(0) </description_user>
+<type>uint32</type>
+<default> 1 </default>
+<range_min>0</range_min>
+<range_max>1</range_max>
+</config_element>
+
+<config_element name="NT_DEVCFG_DEF_DTIM_VALUE" psid="128">
+<label> NT_DEVCFG_DEF_DTIM_VALUE </label>
+<description_user>default dtim value for app </description_user>
+<type>uint32</type>
+<default> 5 </default>
+</config_element>
+
+<config_element name="NT_DEVCFG_POWERSAVE_WUR_EXIT_FOR_VALID_VENDOR" psid="129">
+<label> NT_DEVCFG_POWERSAVE_WUR_EXIT_FOR_VALID_VENDOR </label>
+<description_user>app should send wake command if it receive message from valid vendor </description_user>
+<type>uint32</type>
+<default>1</default>
+</config_element>
+
+<config_element name="NT_DEVCFG_ONBOARDING_via_CONCURRENCY" psid="130">
+<label> NT_DEVCFG_ONBOARDING_via_CONCURRENCY </label>
+<description_user>Onboarding via cONCURRENCY ENABLED </description_user>
+<type>uint32</type>
+<default> 0 </default>
+</config_element>
+
+<config_element name="NT_DEVCFG_DEFAULT_CONC_DEVICE_MODE" psid="131">
+<label> NT_DEVCFG_DEFAULT_CONC_DEVICE_MODE </label>
+<description_user>Default device mode chosen in ap_sta mode STA(1)/AP(0) </description_user>
+<type>uint32</type>
+<default> 0 </default>
+<range_min>0</range_min>
+<range_max>1</range_max>
+</config_element>
+
+<config_element name="NT_DEVCFG_RA_FIXED_RATE_INDEX" psid="132">
+<label> NT_DEVCFG_RA_FIXED_RATE_INDEX </label>
+<description_user>default-fixed rate </description_user>
+<type>uint32</type>
+<default> 0 </default>
+</config_element>
+
+<config_element name="NT_DEVCFG_RA_ADAPTATION_TIMER" psid="133">
+<label> NT_DEVCFG_RA_ADAPTATION_TIMER </label>
+<description_user>default-periodic timer or sampling period </description_user>
+<type>uint32</type>
+<default> 200 </default>
+</config_element>
+
+<config_element name="NT_DEVCFG_RA_FAST_JUMP_THRESHOLD" psid="134">
+<label> NT_DEVCFG_RA_FAST_JUMP_THRESHOLD </label>
+<description_user>default-failure thershold  at tertiary rate before fast jump is enabled </description_user>
+<type>uint32</type>
+<default> 50 </default>
+</config_element>
+
+<config_element name="NT_DEVCFG_RA_MIN_PKT_TX_THRESHOLD" psid="135">
+<label> NT_DEVCFG_RA_MIN_PKT_TX_THRESHOLD </label>
+<description_user>default-min pkts tx required to consider in next rate computation </description_user>
+<type>uint32</type>
+<default> 10 </default>
+</config_element>
+
+<config_element name="NT_DEVCFG_RA_MIN_GOOD_PUT_FILTER_COEF" psid="136">
+<label> NT_DEVCFG_RA_MIN_GOOD_PUT_FILTER_COEF </label>
+<description_user>default-Good put minimum threshold </description_user>
+<type>uint32</type>
+<default> 30 </default>
+</config_element>
+
+<config_element name="NT_DEVCFG_RA_MAX_GOOD_PUT_FILTER_COEF" psid="137">
+<label> NT_DEVCFG_RA_MAX_GOOD_PUT_FILTER_COEF </label>
+<description_user>default-Good put maximum threshold </description_user>
+<type>uint32</type>
+<default> 90 </default>
+</config_element>
+
+<config_element name="NT_DEVCFG_RETRY_THRESHOLD0" psid="138">
+<label> NT_DEVCFG_RETRY_THRESHOLD0 </label>
+<description_user>Zeroth tx retry threshold </description_user>
+<type>uint32</type>
+<default> 2 </default>
+</config_element>
+
+<config_element name="NT_DEVCFG_RETRY_THRESHOLD1" psid="139">
+<label> NT_DEVCFG_RETRY_THRESHOLD1 </label>
+<description_user>First tx retry threshold </description_user>
+<type>uint32</type>
+<default> 4 </default>
+</config_element>
+
+<config_element name="NT_DEVCFG_RETRY_THRESHOLD2" psid="140">
+<label> NT_DEVCFG_RETRY_THRESHOLD2 </label>
+<description_user>Second tx retry threshold </description_user>
+<type>uint32</type>
+<default> 6 </default>
+</config_element>
+
+<config_element name="NT_DEVCFG_MGMT_RETRY_THRESHOLD0" psid="141">
+<label> NT_DEVCFG_MGMT_RETRY_THRESHOLD0 </label>
+<description_user>Zeroth tx mgmt retry threshold </description_user>
+<type>uint32</type>
+<default> 2 </default>
+</config_element>
+
+<config_element name="NT_DEVCFG_MGMT_RETRY_THRESHOLD1" psid="142">
+<label> NT_DEVCFG_MGMT_RETRY_THRESHOLD1 </label>
+<description_user>First tx mgmt retry threshold </description_user>
+<type>uint32</type>
+<default> 4 </default>
+</config_element>
+
+<config_element name="NT_DEVCFG_MGMT_RETRY_THRESHOLD2" psid="143">
+<label> NT_DEVCFG_MGMT_RETRY_THRESHOLD2 </label>
+<description_user>Second tx mgmt retry threshold </description_user>
+<type>uint32</type>
+<default> 6 </default>
+</config_element>
+
+<config_element name="NT_DEVCFG_BC_MC_PRIMARY_RA_IDX" psid="144">
+<label> NT_DEVCFG_BC_MC_PRIMARY_RA_IDX </label>
+<description_user>default bc mc primay tx rate </description_user>
+<type>uint32</type>
+<default>0x1B</default>
+</config_element>
+
+<config_element name="NT_DEVCFG_BC_MC_SECONDARY_RA_IDX" psid="145">
+<label> NT_DEVCFG_BC_MC_SECONDARY_RA_IDX </label>
+<description_user>default bc mc secondary tx rate </description_user>
+<type>uint32</type>
+<default>0x1B</default>
+</config_element>
+
+<config_element name="NT_DEVCFG_BC_MC_TERTIARY_RA_IDX" psid="146">
+<label> NT_DEVCFG_BC_MC_TERTIARY_RA_IDX </label>
+<description_user>default bc mc tertiary tx rate </description_user>
+<type>uint32</type>
+<default>0x1B</default>
+</config_element>
+
+<config_element name="NT_DEVCFG_RA_PER_UPPER_THRESHOLD" psid="147">
+<label> NT_DEVCFG_RA_PER_UPPER_THRESHOLD </label>
+<description_user>PER upper threshold </description_user>
+<type>uint32</type>
+<default> 30 </default>
+<range_min>30</range_min>
+<range_max>30</range_max>
+</config_element>
+
+<config_element name="NT_DEVCFG_RA_UPRATE_SAMPLING_CNT" psid="148">
+<label> NT_DEVCFG_RA_UPRATE_SAMPLING_CNT </label>
+<description_user>Uprate sampling count </description_user>
+<type>uint32</type>
+<default> 5 </default>
+<range_min>5</range_min>
+<range_max>5</range_max>
+</config_element>
+
+<config_element name="NT_DEVCFG_RA_RETAIN_RATE" psid="149">
+<label> NT_DEVCFG_RA_RETAIN_RATE </label>
+<description_user>retain rate on wakeup 1-reset, 2-retain </description_user>
+<type>uint32</type>
+<default> 1 </default>
+<range_min>1</range_min>
+<range_max>2</range_max>
+</config_element>
+
+<config_element name="NT_DEVCFG_RA_ON" psid="150">
+<label> NT_DEVCFG_RA_ON </label>
+<description_user>default- rate adoption turned ON - 1  / OFF - 0 </description_user>
+<type>uint32</type>
+<default> 0  </default>
+<range_min>0</range_min>
+<range_max>1</range_max>
+</config_element>
+
+<config_element name="NT_DEVCFG_RA_FIXED_PRI_RATE_INDEX" psid="151">
+<label> NT_DEVCFG_RA_FIXED_PRI_RATE_INDEX </label>
+<description_user>default- pri fixed rate </description_user>
+<type>uint32</type>
+<default> 0 </default>
+<range_min>0</range_min>
+<range_max>0</range_max>
+</config_element>
+
+<config_element name="NT_DEVCFG_RA_FIXED_SEC_RATE_INDEX" psid="152">
+<label> NT_DEVCFG_RA_FIXED_SEC_RATE_INDEX </label>
+<description_user>default- sec fixed rate </description_user>
+<type>uint32</type>
+<default> 0 </default>
+<range_min>0</range_min>
+<range_max>0</range_max>
+</config_element>
+
+<config_element name="NT_DEVCFG_RA_FIXED_TRI_RATE_INDEX" psid="153">
+<label> NT_DEVCFG_RA_FIXED_TRI_RATE_INDEX </label>
+<description_user>default- tri fixed rate </description_user>
+<type>uint32</type>
+<default> 0 </default>
+<range_min>0</range_min>
+<range_max>0</range_max>
+</config_element>
+
+<config_element name="NT_DEVCFG_RA_MCS4_RX_EN" psid="154">
+<label> NT_DEVCFG_RA_MCS4_RX_EN </label>
+<description_user>MCS4 RX is enabled or not </description_user>
+<type>uint32</type>
+<default> 1 </default>
+<range_min>0</range_min>
+<range_max>1</range_max>
+</config_element>
+
+<config_element name="NT_DEVCFG_WIFISEC_AUTH_INTER_FRM_TIMER" psid="155">
+<label> NT_DEVCFG_WIFISEC_AUTH_INTER_FRM_TIMER </label>
+<description_user>default-M1/M3 timer (authenticator side) </description_user>
+<type>uint32</type>
+<default> 1 </default>
+</config_element>
+
+<config_element name="NT_DEVCFG_WIFISEC_AUTH_RETRY_COUNT" psid="156">
+<label> NT_DEVCFG_WIFISEC_AUTH_RETRY_COUNT </label>
+<description_user>default-M1/M3 retry count (authenticator side) </description_user>
+<type>uint32</type>
+<default> 3 </default>
+<range_min>3</range_min>
+<range_max>3</range_max>
+</config_element>
+
+<config_element name="NT_DEVCFG_WIFISEC_SUPPL_SESSION_TIMER" psid="157">
+<label> NT_DEVCFG_WIFISEC_SUPPL_SESSION_TIMER </label>
+<description_user>default-4way handshake timer (supplicant side) </description_user>
+<type>uint32</type>
+<default> 30 </default>
+</config_element>
+
+<config_element name="NT_DEVCFG_WIFISEC_TKIP_CM_TIMER" psid="158">
+<label> NT_DEVCFG_WIFISEC_TKIP_CM_TIMER </label>
+<description_user>mic failure during 4way handshake </description_user>
+<type>uint32</type>
+<default> 60 </default>
+</config_element>
+
+<config_element name="NT_DEVCFG_WPS_CONFIG_MODE" psid="159">
+<label> NT_DEVCFG_WPS_CONFIG_MODE </label>
+<description_user>WPS onfiguration mode pin_1 push_2 </description_user>
+<type>uint32</type>
+<default> 2 </default>
+</config_element>
+
+<config_element name="NT_DEVCFG_CONN_TIMEOUT" psid="160">
+<label> NT_DEVCFG_CONN_TIMEOUT </label>
+<description_user>default-connection time out </description_user>
+<type>uint32</type>
+<default> 15 </default>
+<range_min>15</range_min>
+<range_max>15</range_max>
+</config_element>
+
+<config_element name="NT_DEVCFG_CONN_RETRY_COUNT" psid="161">
+<label> NT_DEVCFG_CONN_RETRY_COUNT </label>
+<description_user>default-max connection retry  </description_user>
+<type>uint32</type>
+<default> 0 </default>
+<range_min>0</range_min>
+<range_max>0</range_max>
+</config_element>
+
+<config_element name="NT_DEVCFG_CONN_WLAN_MLME_TO" psid="162">
+<label> NT_DEVCFG_CONN_WLAN_MLME_TO </label>
+<description_user>default-auth/assoc timeout value </description_user>
+<type>uint32</type>
+<default> 1000 </default>
+</config_element>
+
+<config_element name="NT_DEVCFG_CONN_MLME_SM_RETRY_CNT" psid="163">
+<label> NT_DEVCFG_CONN_MLME_SM_RETRY_CNT </label>
+<description_user>default-auth/assoc retry count </description_user>
+<type>uint32</type>
+<default> 3 </default>
+</config_element>
+
+<config_element name="NT_DEVCFG_CONN_ASSOC_COMEBACK_TIMEOUT" psid="164">
+<label> NT_DEVCFG_CONN_ASSOC_COMEBACK_TIMEOUT </label>
+<description_user>default-assoc comeback timeout value </description_user>
+<type>uint32</type>
+<default> 2 </default>
+</config_element>
+
+<config_element name="NT_DEVCFG_CONN_ADDBA_RESP_TIMM" psid="165">
+<label> NT_DEVCFG_CONN_ADDBA_RESP_TIMM </label>
+<description_user>default-add ba resp timer </description_user>
+<type>uint32</type>
+<default> 1 </default>
+</config_element>
+
+<config_element name="NT_DEVCFG_CONN_MIC_ERR_TIMM" psid="166">
+<label> NT_DEVCFG_CONN_MIC_ERR_TIMM </label>
+<description_user>default-mic error timer </description_user>
+<type>uint32</type>
+<default> 60 </default>
+</config_element>
+
+<config_element name="NT_DEVCFG_CONN_TKIP_WAIT_TIMM" psid="167">
+<label> NT_DEVCFG_CONN_TKIP_WAIT_TIMM </label>
+<description_user>default-tkip countermeasure timer </description_user>
+<type>uint32</type>
+<default> 50 </default>
+</config_element>
+
+<config_element name="NT_DEVCFG_CONN_CONSECUTIVE_BMISS_THRESHOLD" psid="168">
+<label> NT_DEVCFG_CONN_CONSECUTIVE_BMISS_THRESHOLD </label>
+<description_user>default-beacon miss threshold to initiate reconnect </description_user>
+<type>uint32</type>
+<default> 30 </default>
+<range_min>30</range_min>
+<range_max>30</range_max>
+</config_element>
+
+<config_element name="NT_DEVCFG_CONN_MODIFIED_BEACON_INTERVAL" psid="169">
+<label> NT_DEVCFG_CONN_MODIFIED_BEACON_INTERVAL </label>
+<description_user>modified beacon interval </description_user>
+<type>uint32</type>
+<default> 100 </default>
+<range_min>100</range_min>
+<range_max>100</range_max>
+</config_element>
+
+<config_element name="NT_DEVCFG_CONN_STA_INACT_INTERVAL" psid="170">
+<label> NT_DEVCFG_CONN_STA_INACT_INTERVAL </label>
+<description_user>sta inactivity interval in secs </description_user>
+<type>uint32</type>
+<default> 0 </default>
+<range_min>0</range_min>
+<range_max>0</range_max>
+</config_element>
+
+<config_element name="NT_DEVCFG_CONN_PS_STA_INACT_FACTOR" psid="171">
+<label> NT_DEVCFG_CONN_PS_STA_INACT_FACTOR </label>
+<description_user>power save sta inactivity factor </description_user>
+<type>uint32</type>
+<default> 10 </default>
+</config_element>
+
+<config_element name="NT_DEVCFG_TRANSMIT_INTERRUPT_THRESHOLD_CONFIG" psid="172">
+<label> NT_DEVCFG_TRANSMIT_INTERRUPT_THRESHOLD_CONFIG </label>
+<description_user>to configure the lowest voltage below which transmission interrupt will be triggered </description_user>
+<type>uint32</type>
+<default>0x3F</default>
+</config_element>
+
+<config_element name="NT_DEVCFG_RINT_MEASUREMENT_START_THRESHOLD_CONFIG" psid="173">
+<label> NT_DEVCFG_RINT_MEASUREMENT_START_THRESHOLD_CONFIG </label>
+<description_user>config for the voltage below which Rint measurement of coin cell will be started </description_user>
+<type>uint32</type>
+<default>0xDD</default>
+</config_element>
+
+<config_element name="NT_DEVCFG_RINT_MEASUREMENT_STOP_THRESHOLD_CONFIG" psid="174">
+<label> NT_DEVCFG_RINT_MEASUREMENT_STOP_THRESHOLD_CONFIG </label>
+<description_user>config for the voltage above which Rint measurement of coin cell  will be stopped </description_user>
+<type>uint32</type>
+<default>0x14F</default>
+</config_element>
+
+<config_element name="NT_DEVCFG_TXOP_VBATT_AVERAGE_SAMPLES_CONFIG" psid="175">
+<label> NT_DEVCFG_TXOP_VBATT_AVERAGE_SAMPLES_CONFIG </label>
+<description_user>after collecting (2^config) no of samples out put will be given by HKADC after TXOP </description_user>
+<type>uint32</type>
+<default>1</default>
+</config_element>
+
+<config_element name="NT_DEVCFG_RINT_AVERAGE_SAMPLES_CONFIG" psid="176">
+<label> NT_DEVCFG_RINT_AVERAGE_SAMPLES_CONFIG </label>
+<description_user>after collecting (2^config) no of samples out put will be given by HKADC for Rint measurement </description_user>
+<type>uint32</type>
+<default>1</default>
+</config_element>
+
+<config_element name="NT_DEVCFG_RINT_MEASUREMENT_WINDOW_TIME_CONFIG" psid="177">
+<label> NT_DEVCFG_RINT_MEASUREMENT_WINDOW_TIME_CONFIG </label>
+<description_user>time span for Vbatt Rint measurement window </description_user>
+<type>uint32</type>
+<default>0x384</default>
+</config_element>
+
+<config_element name="NT_DEVCFG_RINT_MEASUREMENT_TIME_OUT_CONFIG" psid="178">
+<label> NT_DEVCFG_RINT_MEASUREMENT_TIME_OUT_CONFIG </label>
+<description_user>if time span for Vbatt Rint measurement window expires,and the voltage does not come back to stop threshold, this much extra time is given to coin cell for recovery,after expiration of this time vbatt timeout interrupt will be triggered </description_user>
+<type>uint32</type>
+<default>0x1F4</default>
+</config_element>
+
+<config_element name="NT_DEVCFG_DEFAULT_PHY_MODE" psid="179">
+<label> NT_DEVCFG_DEFAULT_PHY_MODE </label>
+<description_user>default-phymode MODE_11B/MODE_11G/MODE_11NG_HT20/MODE_UNKNOWN/MODE_MAX </description_user>
+<type>uint32</type>
+<default> 5 </default>
+<range_min>0</range_min>
+<range_max>5</range_max>
+</config_element>
+
+<config_element name="NT_DEVCFG_OPERATING_CHAN" psid="180">
+<label> NT_DEVCFG_OPERATING_CHAN </label>
+<description_user>default-operating channel-ns </description_user>
+<type>uint32</type>
+<default> 3 </default>
+</config_element>
+
+<config_element name="NT_DEVCFG_AUTO_BA" psid="181">
+<label> NT_DEVCFG_AUTO_BA </label>
+<description_user>enable BA after connection </description_user>
+<type>uint32</type>
+<default> 0 </default>
+<range_min>0</range_min>
+<range_max>0</range_max>
+</config_element>
+
+<config_element name="NT_DEVCFG_AUTO_BA_AC_TYPE" psid="182">
+<label> NT_DEVCFG_AUTO_BA_AC_TYPE </label>
+<description_user>enable traffic after AUTO_BA </description_user>
+<type>uint32</type>
+<default> 0 </default>
+<range_min>0</range_min>
+<range_max>0</range_max>
+</config_element>
+
+<config_element name="NT_DEVCFG_WMMP_BE_ACM" psid="183">
+<label> NT_DEVCFG_WMMP_BE_ACM </label>
+<description_user>default-acm parameter </description_user>
+<type>uint32</type>
+<default> 0 </default>
+<range_min>0</range_min>
+<range_max>2</range_max>
+<is_internal>true</is_internal>
+</config_element>
+
+<config_element name="NT_DEVCFG_WMMP_BE_AIFSN" psid="184">
+<label> NT_DEVCFG_WMMP_BE_AIFSN </label>
+<description_user>default-aifsn parameters </description_user>
+<type>uint32</type>
+<default> 3 </default>
+</config_element>
+
+<config_element name="NT_DEVCFG_WMMP_BE_MIN_LOGCW" psid="185">
+<label> NT_DEVCFG_WMMP_BE_MIN_LOGCW </label>
+<description_user>default-cwmin in exponential form </description_user>
+<type>uint32</type>
+<default> 4 </default>
+</config_element>
+
+<config_element name="NT_DEVCFG_WMMP_BE_MAX_LOGCW" psid="186">
+<label> NT_DEVCFG_WMMP_BE_MAX_LOGCW </label>
+<description_user>default-cwmax in exponential form </description_user>
+<type>uint32</type>
+<default> 10 </default>
+</config_element>
+
+<config_element name="NT_DEVCFG_WMMP_BE_TXOP_LIMIT" psid="187">
+<label> NT_DEVCFG_WMMP_BE_TXOP_LIMIT </label>
+<description_user>default-txopLimit </description_user>
+<type>uint32</type>
+<default> 0 </default>
+</config_element>
+
+<config_element name="NT_DEVCFG_WMMP_BK_ACM" psid="188">
+<label> NT_DEVCFG_WMMP_BK_ACM </label>
+<description_user>default-acm parameter of background effort </description_user>
+<type>uint32</type>
+<default> 0 </default>
+</config_element>
+
+<config_element name="NT_DEVCFG_WMMP_BK_AIFSN" psid="189">
+<label> NT_DEVCFG_WMMP_BK_AIFSN </label>
+<description_user>default-aifsn parameters of background effort </description_user>
+<type>uint32</type>
+<default> 7 </default>
+</config_element>
+
+<config_element name="NT_DEVCFG_WMMP_BK_MIN_LOGCW" psid="190">
+<label> NT_DEVCFG_WMMP_BK_MIN_LOGCW </label>
+<description_user>default-cwmin in exponential form of background effort </description_user>
+<type>uint32</type>
+<default> 4 </default>
+</config_element>
+
+<config_element name="NT_DEVCFG_WMMP_BK_MAX_LOGCW" psid="191">
+<label> NT_DEVCFG_WMMP_BK_MAX_LOGCW </label>
+<description_user>default-cwmax in exponential form of background effort </description_user>
+<type>uint32</type>
+<default> 10 </default>
+</config_element>
+
+<config_element name="NT_DEVCFG_WMMP_BK_TXOP_LIMIT" psid="192">
+<label> NT_DEVCFG_WMMP_BK_TXOP_LIMIT </label>
+<description_user>default-txopLimit of background effort </description_user>
+<type>uint32</type>
+<default> 0 </default>
+</config_element>
+
+<config_element name="NT_DEVCFG_WMMP_VI_ACM" psid="193">
+<label> NT_DEVCFG_WMMP_VI_ACM </label>
+<description_user>default-acm parameter for video </description_user>
+<type>uint32</type>
+<default> 0 </default>
+<range_min>0</range_min>
+<range_max>2</range_max>
+<is_internal>true</is_internal>
+</config_element>
+
+<config_element name="NT_DEVCFG_WMMP_VI_AIFSN" psid="194">
+<label> NT_DEVCFG_WMMP_VI_AIFSN </label>
+<description_user>default-aifsn parameters for video </description_user>
+<type>uint32</type>
+<default> 2 </default>
+</config_element>
+
+<config_element name="NT_DEVCFG_WMMP_VI_MIN_LOGCW" psid="195">
+<label> NT_DEVCFG_WMMP_VI_MIN_LOGCW </label>
+<description_user>default-cwmin in exponential form for video </description_user>
+<type>uint32</type>
+<default> 3 </default>
+</config_element>
+
+<config_element name="NT_DEVCFG_WMMP_VI_MAX_LOGCW" psid="196">
+<label> NT_DEVCFG_WMMP_VI_MAX_LOGCW </label>
+<description_user>default-cwmax in exponential form for video </description_user>
+<type>uint32</type>
+<default> 4 </default>
+</config_element>
+
+<config_element name="NT_DEVCFG_WMMP_VI_TXOP_LIMIT" psid="197">
+<label> NT_DEVCFG_WMMP_VI_TXOP_LIMIT </label>
+<description_user>default-txopLimit for video </description_user>
+<type>uint32</type>
+<default> 94 </default>
+</config_element>
+
+<config_element name="NT_DEVCFG_WMMP_VO_ACM" psid="198">
+<label> NT_DEVCFG_WMMP_VO_ACM </label>
+<description_user>default-acm parameter for voice </description_user>
+<type>uint32</type>
+<default> 0 </default>
+</config_element>
+
+<config_element name="NT_DEVCFG_WMMP_VO_AIFSN" psid="199">
+<label> NT_DEVCFG_WMMP_VO_AIFSN </label>
+<description_user>default-aifsn parameters for voice </description_user>
+<type>uint32</type>
+<default> 2 </default>
+</config_element>
+
+<config_element name="NT_DEVCFG_WMMP_VO_MIN_LOGCW" psid="200">
+<label> NT_DEVCFG_WMMP_VO_MIN_LOGCW </label>
+<description_user>default-cwmin in exponential form for voice </description_user>
+<type>uint32</type>
+<default> 2 </default>
+</config_element>
+
+<config_element name="NT_DEVCFG_WMMP_VO_MAX_LOGCW" psid="201">
+<label> NT_DEVCFG_WMMP_VO_MAX_LOGCW </label>
+<description_user>default-cwmax in exponential form for voice </description_user>
+<type>uint32</type>
+<default> 3 </default>
+</config_element>
+
+<config_element name="NT_DEVCFG_WMMP_VO_TXOP_LIMIT" psid="202">
+<label> NT_DEVCFG_WMMP_VO_TXOP_LIMIT </label>
+<description_user>default-txopLimit for voice </description_user>
+<type>uint32</type>
+<default> 47 </default>
+</config_element>
+
+<config_element name="NT_DEVCFG_WMM_STATUS" psid="203">
+<label> NT_DEVCFG_WMM_STATUS </label>
+<description_user>default-wmm status either enable/disable </description_user>
+<type>uint32</type>
+<default> 1 </default>
+</config_element>
+
+<config_element name="NT_DEVCFG_HT" psid="204">
+<label> NT_DEVCFG_HT </label>
+<description_user> default-High through put </description_user>
+<type>uint32</type>
+<default> 1 </default>
+</config_element>
+
+<config_element name="NT_DEVCFG_DEFAULT_DHCP_ENABLE" psid="205">
+<label> NT_DEVCFG_DEFAULT_DHCP_ENABLE </label>
+<description_user>Enable/Disable DHCP </description_user>
+<type>uint32</type>
+<default> 0 </default>
+<range_min>0</range_min>
+<range_max>1</range_max>
+</config_element>
+
+<config_element name="NT_DEVCFG_DEFAULT_MAC_ADDR_AP_P1" psid="206">
+<label> NT_DEVCFG_DEFAULT_MAC_ADDR_AP_P1 </label>
+<description_user>default-MAC address of AP first 2 bytes </description_user>
+<type>uint32</type>
+<default>0x0404</default>
+</config_element>
+
+<config_element name="NT_DEVCFG_DEFAULT_MAC_ADDR_AP_P2" psid="207">
+<label> NT_DEVCFG_DEFAULT_MAC_ADDR_AP_P2 </label>
+<description_user>default-MAC address of AP second 2 bytes </description_user>
+<type>uint32</type>
+<default>0x0404</default>
+</config_element>
+
+<config_element name="NT_DEVCFG_DEFAULT_MAC_ADDR_AP_P3" psid="208">
+<label> NT_DEVCFG_DEFAULT_MAC_ADDR_AP_P3 </label>
+<description_user>default-MAC address of AP third 2 bytes </description_user>
+<type>uint32</type>
+<default>0x0404</default>
+</config_element>
+
+<config_element name="NT_DEVCFG_DEFAULT_MAC_ADDR_STA_P1" psid="209">
+<label> NT_DEVCFG_DEFAULT_MAC_ADDR_STA_P1 </label>
+<description_user>default-MAC address of STA first 2 bytes </description_user>
+<type>uint32</type>
+<default>0x0808</default>
+</config_element>
+
+<config_element name="NT_DEVCFG_DEFAULT_MAC_ADDR_STA_P2" psid="210">
+<label> NT_DEVCFG_DEFAULT_MAC_ADDR_STA_P2 </label>
+<description_user>default-MAC address of STA second 2 bytes </description_user>
+<type>uint32</type>
+<default>0x0808</default>
+</config_element>
+
+<config_element name="NT_DEVCFG_DEFAULT_MAC_ADDR_STA_P3" psid="211">
+<label> NT_DEVCFG_DEFAULT_MAC_ADDR_STA_P3 </label>
+<description_user>default-MAC address of STA third 2 bytes </description_user>
+<type>uint32</type>
+<default>0x0808</default>
+</config_element>
+
+<config_element name="NT2_DEVCFG_ENABLE_DISABLE_RRAM_DXE" psid="212">
+<label> NT2_DEVCFG_ENABLE_DISABLE_RRAM_DXE </label>
+<description_user>default value 1 for dxe enable 0 for disable </description_user>
+<type>uint32</type>
+<default> 1 </default>
+<range_min>0</range_min>
+<range_max>1</range_max>
+</config_element>
+
+</metadata>
+</metadata_list>

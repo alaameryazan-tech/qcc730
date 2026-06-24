@@ -1,0 +1,18 @@
+{
+    "export_paths": [
+        "C:\\Users\\eurot\\.qcc_ide\\Sdks\\1.0.0^qccsdk_qcc730\\../../Tools\\arm_gcc\\8 2019-q3-update\\../../arm_gcc/8 2019-q3-update/bin",
+        "C:\\Users\\eurot\\.qcc_ide\\Sdks\\1.0.0^qccsdk_qcc730\\../../Tools\\python\\3.11.5\\../../Python/3.11.5",
+        "C:\\Users\\eurot\\.qcc_ide\\Sdks\\1.0.0^qccsdk_qcc730\\../../Tools\\openocdForCh347\\0.12.0+dev\\../../openocdForCh347/0.12.0+dev/ch347-main/OpenOCD_CH347/bin",
+        "C:\\Users\\eurot\\.qcc_ide\\Sdks\\1.0.0^qccsdk_qcc730\\../../Tools\\gn\\2073\\../../gn/2073",
+        "C:\\Users\\eurot\\.qcc_ide\\Sdks\\1.0.0^qccsdk_qcc730\\../../Tools\\ninja\\1.11.1\\../../ninja/1.11.1/"
+    ],
+    "sdk_root_path_from_download_path": "./qccsdk-qcc730",
+    "PYTHONPATH": [
+        "tools/nvm_programmer/gdb_framework"
+    ],
+    "demoChipBoard": "qcc730v2_evb11_hostless",
+    "compiler_path": "C:\\Users\\eurot\\.qcc_ide\\Sdks\\1.0.0^qccsdk_qcc730\\../../Tools\\arm_gcc\\8 2019-q3-update\\../../arm_gcc/8 2019-q3-update/bin/arm-none-eabi-gcc",
+    "pth_file_name": "python311._pth",
+    "GDB_CLIENT_PATH": "C:\\Users\\eurot\\.qcc_ide\\Sdks\\1.0.0^qccsdk_qcc730\\../../Tools\\xpack_arm_gcc\\12.2.1-1.2\\../../xpack_arm_gcc/12.2.1-1.2/xpack-arm-none-eabi-gcc-12.2.1-1.2/bin",
+    "OPENOCD_PATH": "C:\\Users\\eurot\\.qcc_ide\\Sdks\\1.0.0^qccsdk_qcc730\\../../Tools\\openocdForCh347\\0.12.0+dev\\../../openocdForCh347/0.12.0+dev/ch347-main/OpenOCD_CH347/bin"
+}

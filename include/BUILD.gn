@@ -1,0 +1,25 @@
+#Copyright (c) 2024 Qualcomm Innovation Center, Inc. All rights reserved.
+#SPDX-License-Identifier: BSD-3-Clause-Clear
+#
+
+import("//configs_decl.gni")
+#import("${root_build_dir}/mainconfig.gni")
+
+
+include_inc_fermion = [
+    "qapi/common",
+    "qapi",
+    "api",
+    ".",
+]
+
+config("_config") {
+    include_dirs = include_inc_fermion
+    if (CONFIG_WLAN) {
+        include_dirs += [ "qapi/wlan" ]
+    }
+}
+
+source_set("include") {
+    sources = []
+}

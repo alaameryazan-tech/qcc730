@@ -1,0 +1,24 @@
+#Copyright (c) 2024 Qualcomm Innovation Center, Inc. All rights reserved.
+#SPDX-License-Identifier: BSD-3-Clause-Clear
+#
+#import("${root_build_dir}/mainconfig.gni")
+import("//configs_decl.gni")
+
+console_inc = [
+    ".",
+]
+
+console_src = [
+    "qapi_console.c",
+    "qcli.c",
+    "qcli_pal.c",
+    "qcli_util.c",
+]
+
+config("_config") {
+    include_dirs = console_inc
+}
+
+source_set("console") {
+    sources = console_src
+}

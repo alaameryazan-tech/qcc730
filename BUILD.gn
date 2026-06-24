@@ -1,0 +1,312 @@
+#Copyright (c) 2024 Qualcomm Innovation Center, Inc. All rights reserved.
+#SPDX-License-Identifier: BSD-3-Clause-Clear
+#
+#import("${root_build_dir}/mainconfig.gni")
+import("//configs_decl.gni")
+
+is_pbl = false
+is_ioe_pbl = false
+is_sbl = false
+is_hosted_sbl = false
+is_nvm_programmer = false
+is_ftm = false
+is_matter = false
+need_fs = false
+elf_dir = "bin"
+build_type = "__DEBUG_BUILD"
+
+if (image_name == "FERMION_PBL") {
+    is_pbl = true
+}
+
+if (image_name == "FERMION_SBL") {
+    is_sbl = true
+}
+
+if (image_name == "FERMION_HOSTED_SBL") {
+    is_hosted_sbl = true
+}
+
+if (image_name == "FERMION_NVM_PROGRAMMER") {
+    is_nvm_programmer = true
+}
+
+if (image_name == "FERMION_FTM") {
+    is_ftm = true
+}
+
+if (image_name == "FERMION_MATTER_DEMO") {
+    is_matter = true
+}
+
+if (image_name == "FERMION") {
+    CONFIG_LIBWIFI_CORE = false
+}
+
+if (image_name =="FERMION_FS_DEMO" || image_name == "FERMION_IOE_QCLI_DEMO" || image_name == "FERMION_MQTT_DEMO" || image_name == "FERMION_MATTER_DEMO" || image_name == "FERMION_QAT_DEMO") {
+    need_fs = true
+}
+
+if (board_name == "qcc730v2_evb12_hostless") {
+    need_fs = false
+}
+
+lib_c_nano_path = exec_script("build/gn/scripts/get_arm_gcc_lib_path.py", ["c_nano"], "list lines")
+lib_gcc_path = exec_script("build/gn/scripts/get_arm_gcc_lib_path.py", ["gcc"], "list lines")
+#lIb_bdreg_path = exec_script("build/freertos/eclipse-gcc/Scripts/frn_generate_regdb_bdwlan_lib.py", [rebase_path("."), board_name], "list lines")
+
+
+
+projects_pbl = [
+    "//fermion_pbl",
+]
+
+projects_sbl = [
+    "//bootloader/SBL",
+]
+
+projects_hosted_sbl = [
+    "//bootloader/HOSTED_SBL",
+]
+
+projects_nvm_programmer = [
+    "//tools/nvm_programmer",
+]
+
+projects_common = [
+    "//lib/segger/SEGGER_RTT",
+    "//modules/core/qcc_wifi",
+    "//modules/core/system",
+    "//modules/hal",
+    "//include",
+    "//build/freertos/common/application_code",
+    "//tools/Target_tools",
+    "//drivers",
+    "//lib",
+    "//modules/console",
+    "//modules/core/hostif",
+    "//demo/qcli_demo",
+    "//demo/hello_world",
+    "//demo/posix_demo",
+    "//demo/common",
+    "//kernel/freertos",
+    "//kernel/qurt",
+    "//modules/fw_upgrade",
+    "//modules/net/mbedtls",
+    "//modules/net/lwip",
+    "//arch/arm/system",
+    "//demo/fs_demo",
+    "//demo/mqtt_demo",
+    "//demo/matter_demo",
+    "//demo/qat_demo",
+    "//demo/powertest_demo",
+    "//modules/net/mqtt_client",
+    "//modules/net/httpd",
+    "//modules/qat",
+    "//demo/ambient_power_demo",
+    "//modules/supplicant",
+]
+
+if (!CONFIG_WPS_LIB) {
+    projects_common+= [
+        "//modules/core/qcc_wifi/wps_stub",
+    ]
+}
+
+projects_wifi_core = [
+    "//modules/wifi",
+]
+
+
+projects_fs = [
+    "//modules/fs",
+]
+
+not_needed("*", [ ])
+
+config("common_define") {
+    defines = [ "SCALE_INCLUDES", "CRM_BUILD_NUM=${build_id}", "IMAGE_FERMION",
+        "CONFIG_WLAN=1", "CONFIG_NET=1", "CONFIG_FWUP_DEMO=1"
+    ]
+
+    defines += [ "DFU_BUILD", "PLATFORM_FERMION", "PHYDEVLIB_PRODUCT_FERMION", "PHYDEVLIB_IOT", "FERMION_SILICON"]
+    defines += [ "FERMION_CHIP_VERSION=${CHIP_VERSION_FERMION}" ]
+    if (CHIP_VERSION_FERMION == 2) {
+        defines += [ "FEMION_IOT" ]
+    }
+    defines += [ "SILICON_BUILD" ]
+    if (!is_pbl) {
+        defines += [
+            "USE_FERMION_HALMAC",
+            "__BUILD_TYPE=\"${build_type}\"",
+            "NT_DEBUG",
+            "DEBUG",
+            "CHIP_HALPHY_FULL_DEBUG",
+        ]
+    }
+    if (is_ftm) {
+        defines += [
+            "FTM_OVER_UART",
+        ]
+    }
+    if (image_name == "FERMION_POWER_TEST_DEMO"){
+        defines += [ "CONFIG_POWER_TEST_DEMO_ENABLE=1" ]
+    }
+
+    if (image_name == "FERMION_AMBIENT_POWER_DEMO"){
+        defines += [ "CONFIG_AMBIENT_POWER_ENABLE=1" ]
+    }
+}
+
+config("common_inc") {
+    cflags_c = [ "-include", rebase_path("${root_build_dir}/autoconf.h"), ]
+    include_dirs = []
+
+    if (CHIP_VERSION_FERMION == 1) {
+        include_dirs += [ "modules/core/common/hwio/fermion/$PLATFORM_VERSION_FERMION" ]
+    } else if (CHIP_VERSION_FERMION == 2) {
+        include_dirs += [ "modules/core/common/hwio/fermionv2/$PLATFORM_VERSION_FERMION_V2" ]
+    }
+    include_dirs += [ "modules/core/common",
+    "modules/wifi/inc/",
+        "${root_build_dir}",
+    ]
+
+    include_dirs += [ "modules/wifi/inc", ]
+    include_dirs += [ "../comp/lwip/src/include/", ]
+    include_dirs += [ "../comp/lwip/src/portable", ]
+    include_dirs += [ "../comp/lwip/src/include/lwip", ]
+    include_dirs += [ "../comp/lwip/src/include/compat/posix", ]
+    include_dirs += [ "../comp/littlefs", ]
+    include_dirs += [ "../comp/mqtt/source/include", ]
+    include_dirs += [ "../comp/mqtt/source/interface", ]
+    include_dirs += [ "../comp/backoffAlgorithm/source/include",]
+    include_dirs += [ "//demo/common/net/src",]
+    include_dirs += [ "//drivers/lowpower",]
+    include_dirs += [ "modules/qat",]
+}
+
+config("default_config") {
+    configs = [
+        ":common_define",
+        ":common_inc",
+    ]
+    if (!is_pbl && !is_sbl && !is_hosted_sbl && !is_nvm_programmer) {
+        foreach(prj, projects_common) {
+            prj_cfg = string_join("", [ prj, ":_config" ])
+            configs += [ prj_cfg ]
+        }
+#        if (!is_sdk) {
+#            foreach(prj, projects_wifi_core) {
+#                prj_cfg = string_join("", [ prj, ":_config" ])
+#                configs += [ prj_cfg ]
+#            }
+#        }
+    }
+}
+
+config("linker_config") {
+    libs = []
+    lib_dirs = []
+    ldflags = [ "-no-wchar-size-warning", "--no-warn-mismatch",
+        "-L", rebase_path("build/freertos/eclipse-gcc/ldscripts"),
+    ]
+    if (is_pbl) {
+        ldflags += [ "-Tfrn_pbl.ld" ]
+    } else if (is_sbl) {
+        ldflags += [ "-Tfrn_ioe_sbl.ld" ]
+        ldflags += [ "--start-group", rebase_path("bootloader/SBL/src/pbl_patch.o"), "--end-group" ]
+    } else if (is_hosted_sbl) {
+        ldflags += [ "-Tfrn_ioe_sbl.ld" ]
+        ldflags += [ "--start-group", rebase_path("bootloader/SBL/src/pbl_patch.o"), "--end-group" ]
+    } else if (is_nvm_programmer) {
+        ldflags += [ "-Tfrn_nvm_programmer.ld" ]
+    } else {
+        if (CONFIG_FLASH_XIP_SUPPORT) {
+            ldflags += [ "-Tfrn_ioe_wlan_sys_image-flashxip.ld" ]
+        }
+        else if (!CONFIG_MPU_ENABLE) {
+            ldflags += [ "-Tfrn_ioe_wlan_sys_image_no_mpu.ld" ]
+        }
+        else {
+            ldflags += [ "-Tfrn_ioe_wlan_sys_image.ld" ]
+        }
+        ldflags += [ "--start-group", "regdb.o", "--end-group" ]
+        if (CONFIG_LIBWIFI_CORE) {
+            libs += [ "wifi_core"]
+            if (is_sdk && CONFIG_ENABLE_P2P_MODE) {
+                lib_dirs += [ "//modules/wifi/bin/p2p" ]
+            }
+            else if (is_sdk) {
+                lib_dirs += [ "//modules/wifi/bin" ]
+            }
+            else {
+                lib_dirs += [ "//output/wifi_lib/FERMION_WIFI_LIB/DEBUG/lib" ]
+            }
+        }
+    }
+    ldflags += [ "-Tlibs.ld" ]
+    ldflags += [ "-n", "--gc-sections" ]
+    ldflags += [ "-Map", rebase_path("${root_build_dir}/${elf_dir}/${image_name}.map") ]
+
+    if ( (is_matter) && (CONFIG_MATTER_ENABLE) )
+    {
+        if (CONFIG_MATTER_LIGHTING_DEMO)
+        {
+            libs += [ "//../comp/matter/examples/lighting-app/fermion/output/obj/lib/libLIGHT.a" ]
+        }
+        else if (CONFIG_MATTER_SWITCH_DEMO)
+        {
+            libs += [ "//../comp/matter/examples/light-switch-app/fermion/output/obj/lib/libSWITCH.a" ]
+        }
+        libs += [ "stdc++_nano", "stdc++" ]
+    }
+
+    libs += [ "c_nano", "nosys", "m", "gcc" ]
+    lib_dirs += [ "${lib_c_nano_path[0]}", "${lib_gcc_path[0]}" ]
+}
+
+source_set("wifi_lib") {
+    if (!is_sdk) {
+        public_deps = [ "modules/wifi:wifi",]
+    }
+}
+
+executable("elf_target") {
+    public_deps = []
+    public_configs = [ ":linker_config" ]
+    if (is_pbl) {
+        public_deps += projects_pbl
+    } else if (is_sbl) {
+        public_deps += projects_sbl
+    } else if (is_hosted_sbl) {
+        public_deps += projects_hosted_sbl        
+    } else if (is_nvm_programmer) {
+        public_deps += projects_nvm_programmer
+    } else {
+        public_deps += projects_common
+        if (!is_sdk) {
+            if (!CONFIG_LIBWIFI_CORE) {
+                public_deps += [ ":wifi_lib" ]
+            }
+        }
+    }
+
+    if (need_fs) {
+        public_deps += projects_fs
+    }
+
+    output_name = "${image_name}"
+    output_extension = "elf"
+    output_dir = "${root_build_dir}/${elf_dir}"
+}
+
+action("final_target") {
+    script = "//build/gn/scripts/post_process.py"
+    outputs = [ "$root_build_dir/${elf_dir}/${image_name}.bin", ]
+    args = [
+        rebase_path("$root_build_dir/${elf_dir}/${image_name}.elf", "", "."),
+    ]
+    public_deps = [ ":elf_target" ]
+}
+

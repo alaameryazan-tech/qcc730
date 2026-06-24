@@ -1,0 +1,102 @@
+menu "System Setting"
+
+config PBL_PREES_GPIO_RESTORE
+	bool "Restore GPIO to reset state, so to fix pre-ES PBL wrong operation on GPIO. If ioe_PBL released, please default to n"
+	default y
+
+config PBL_PREES_RESET_FOR_DTIM
+	bool "A reset with CFG_FORCE_NPS_PD_ON is needed for Sleep function. If ioe_PBL released, please default to n"
+	default n
+
+config RING_IF_ONLY
+        bool "Enable RingIF for hosted mode. if hostless mode, please default to n"
+        default n
+
+config QCSPI_HFC_TEST 
+        bool "Enable QCSPI Slave HFC test demo. if QCSPI HFC test demo is not needed , please default to n"
+        default n
+
+config QCSPI_HFC_ETH_ENABLE 
+        bool "Enable QCSPI Slave HFC Viertual Ethernet interface. if QCSPI HFC ETH is not needed , please default to n"
+        default n
+
+config WATCH_DOG_ENABLE
+	bool "Watch Dog function. Please default to n"
+	default n
+
+config WATCH_DOG_BITE_TIME
+	int "When this timer timeout, it will trigger the reset, in unit of seconds.  Make sure to be bigger than bark timer."
+	depends on WATCH_DOG_ENABLE
+	default 8
+
+config CPR_ENABLE
+	bool "Core Power Reduction support, please default to y"
+	default y
+
+config QTMR_GRAY_CODING_WAR
+	bool "A workaround to fix QTMR clock offset, please default to y"
+	default y
+
+config ULP_SMPS2_ONTSHOT_OPTIMIZE
+	bool "Optimize ULP SMPS2 ontshot to support high temperature and low battery"
+	default y
+
+config PMU_TS_MON_PERIOD_US
+	int "Temperature and VBAT are monitored interlavedly with this peroid us"
+	default 1000000
+
+config PRINTF_ERR
+	bool "enalbe printf error message by err_printf"
+	default y
+
+config PRINTF_WARN
+	bool "enalbe printf warning message by warn_printf"
+	default y
+
+config PRINTF_INFO
+	bool "enalbe printf info message by info_printf"
+	default y
+
+config PRINTF_LOG
+	bool "enalbe printf log message by log_printf"
+	default n
+
+config PRINTF_DUMP
+	bool "enalbe printf dump message by dump_printf"
+	default n
+
+config ERROR_PREFIX
+	string "prefix for err_printf"
+	default "[ERR]"
+
+config WARN_PREFIX
+	string "prefix for warn_printf"
+	default "[WARN]"
+
+config INFO_PREFIX
+	string "prefix for info_printf"
+	default "[INFO]"
+
+config LOG_PREFIX
+	string "prefix for log_printf"
+	default "[LOG]"
+
+config DUMP_PREFIX
+	string "prefix for dump_printf"
+	default "[DUMP]"
+
+config WIFI_FW_COREDUMP_SUPPORT
+        bool "enable wifi firmware coredump support"
+        default n
+
+config WIFI_FW_RAMDUMP_PRINT_FLAG
+        int "when this flag is set, the whole ram info should be printed"
+        default 0
+
+config BOARD_EVB_I2C_OPTION
+        bool "when this flag is set n, the I2C eeprom should be for mqm"
+        default n
+
+rsource "mpu.Kconfig"
+
+endmenu

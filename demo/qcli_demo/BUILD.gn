@@ -1,0 +1,43 @@
+# Copyright (c) 2024 Qualcomm Innovation Center, Inc. All rights reserved.
+# SPDX-License-Identifier: BSD-3-Clause-Clear
+#
+#import("${root_build_dir}/mainconfig.gni")
+import("//configs_decl.gni")
+
+qcli_demo_inc = [
+    "src",
+]
+
+qcli_demo_src = [
+    "src/qcli_demo_main.c",
+]
+if (CONFIG_MGMT_FILTER_DEMO) {
+    qcli_demo_inc += [
+        "//demo/common/mgmtfilter",
+    ]
+    
+    qcli_demo_src += [
+        "//demo/common/mgmtfilter/mgmt_filter_demo.c",
+    ]
+}
+
+if (CONFIG_MPU_DEMO) {
+    qcli_demo_inc += [
+        "//demo/common/mpu",
+    ]
+}
+
+config("_config") {
+    if (image_name == "FERMION_QCLI_DEMO" || image_name == "FERMION_IOE_QCLI_DEMO") {
+        include_dirs = qcli_demo_inc
+    }
+}
+
+not_needed("*", [ ])
+
+source_set("qcli_demo") {
+    if (image_name == "FERMION_QCLI_DEMO" || image_name == "FERMION_IOE_QCLI_DEMO") {
+        sources = qcli_demo_src
+    }
+}
+

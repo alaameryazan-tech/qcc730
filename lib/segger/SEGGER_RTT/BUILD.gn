@@ -1,0 +1,19 @@
+#Copyright (c) 2024 Qualcomm Innovation Center, Inc. All rights reserved.
+#SPDX-License-Identifier: BSD-3-Clause-Clear
+#
+#import("${root_build_dir}/mainconfig.gni")
+
+SEGGER_RTT_inc = [
+    "../../../../comp/segger-rtt/RTT",
+]
+
+config("_config") {
+    include_dirs = SEGGER_RTT_inc
+}
+
+source_set("SEGGER_RTT") {
+    sources = [
+        "../../../../comp/segger-rtt/RTT/SEGGER_RTT.c",
+        "../../../../comp/segger-rtt/RTT/SEGGER_RTT_printf.c",
+    ]
+}

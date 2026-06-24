@@ -1,0 +1,520 @@
+[
+  {
+    "1": "Used and updated by extension, you should not change it manually if you don't know why",
+    "prjName": "qcc730SDK",
+    "IDEVer": "^0.5.6",
+    "sdkName": "qccsdk_qcc730",
+    "sdkVer": "1.0.0",
+    "activated": false,
+    "chipID": "QCC730",
+    "chipVersion": "v2",
+    "chipTarget": "QCC730",
+    "toolchainName": "arm-none-eabi-gcc",
+    "sdkPath": "",
+    "demoPath": "./demo",
+    "demoRTOS": "",
+    "demoChipBoard": "mqm730i",
+    "demoBuildScriptWin": "qccsdk.py",
+    "demoBuildScriptLinux": "qccsdk.py",
+    "demoFlashScriptWin": "qccsdk.py",
+    "demoFlashScriptLinux": "qccsdk.py",
+    "cfgSetScriptWin": "qccsdk.py",
+    "cfgSetScriptLinux": "qccsdk.py",
+    "defaultDemo": "FERMION_IOE_QCLI_DEMO",
+    "defaultDemoPathName": "qcli_demo",
+    "buildRunPath": "./",
+    "flashRunPath": "./",
+    "entryFun": "app_main",
+    "elfName": "FERMION_IOE_QCLI_DEMO.elf",
+    "elfPath": "./output/${demoChipBoard}/${defaultDemo}/DEBUG/bin/${elfName}",
+    "gdbInitFilePath": "./tools/jtag/openocd/ch347/gdb_for_qccide.gdbinit",
+    "openocdGdbServerFilePath": "./tools/jtag/openocd/ch347/qcc730.cfg",
+    "boardList": [
+      "cqm730x",
+      "cqm730i",
+      "mqm730x",
+      "mqm730i",
+      "mqm405x",
+      "mqm405i",
+      "qcc730v2_socket",
+      "qcc730v2_evb11_hostless",
+      "qcc730v2_evb13_hostless",
+      "qcc730v2_evb12_hostless"
+    ],
+    "incPaths": [
+      "."
+    ],
+    "SET_CFG_PATTERN": {
+      "win": [
+        "",
+        "python ${cfgSetScriptWin} set --board=${demoChipBoard}",
+        "",
+        "python ${cfgSetScriptWin} set --appdir=&{demoPath}/${defaultDemoPathName}"
+      ],
+      "linux": []
+    },
+    "BUILD_IMAGE_PATTERN": {
+      "win": [
+        "python qccsdk.py set --appdir=demo/${defaultDemoPathName} build --build"
+      ],
+      "linux": []
+    },
+    "CLEAN_IMAGE_PATTERN": {
+      "win": [
+        "python qccsdk.py set --appdir=demo/${defaultDemoPathName} build --clean"
+      ],
+      "linux": []
+    },
+    "FLASH_PATTERN": {
+      "win": [
+        "python qccsdk.py set --appdir=demo/${defaultDemoPathName} flash --flash",
+        "python qccsdk.py set --appdir=demo/${defaultDemoPathName} flash --flash --reset"
+      ],
+      "linux": []
+    }
+  },
+  {
+    "2": "Used and updated by extension, you should not change it manually if you don't know why",
+    "prjName": "qcc730CliDemo",
+    "IDEVer": "^0.5.6",
+    "sdkName": "qccsdk_qcc730",
+    "sdkVer": "1.0.0",
+    "activated": true,
+    "chipID": "QCC730",
+    "chipVersion": "v2",
+    "chipTarget": "QCC730",
+    "toolchainName": "arm-none-eabi-gcc",
+    "sdkPath": "c:\\qcc7030\\qcc7030sdk\\qccsdk",
+    "demoPath": "./demo",
+    "demoRTOS": "",
+    "demoChipBoard": "mqm730i",
+    "demoBuildScriptWin": "qccsdk.py",
+    "demoBuildScriptLinux": "qccsdk.py",
+    "demoFlashScriptWin": "qccsdk.py",
+    "demoFlashScriptLinux": "qccsdk.py",
+    "cfgSetScriptWin": "qccsdk.py",
+    "cfgSetScriptLinux": "qccsdk.py",
+    "defaultDemo": "FERMION_IOE_QCLI_DEMO",
+    "defaultDemoPathName": "qcli_demo",
+    "buildRunPath": "./",
+    "flashRunPath": "./",
+    "entryFun": "app_main",
+    "elfName": "FERMION_IOE_QCLI_DEMO.elf",
+    "elfPath": "./output/${demoChipBoard}/${defaultDemo}/DEBUG/bin/${elfName}",
+    "gdbInitFilePath": "./tools/jtag/openocd/ch347/gdb_for_qccide.gdbinit",
+    "openocdGdbServerFilePath": "./tools/jtag/openocd/ch347/qcc730.cfg",
+    "boardList": [
+      "cqm730x",
+      "cqm730i",
+      "mqm730x",
+      "mqm730i",
+      "mqm405x",
+      "mqm405i",
+      "qcc730v2_socket",
+      "qcc730v2_evb11_hostless",
+      "qcc730v2_evb13_hostless",
+      "qcc730v2_evb12_hostless"
+    ],
+    "incPaths": [
+      "./demo/qcli_demo",
+      "./output/${demoChipBoard}/${defaultDemo}"
+    ],
+    "SET_CFG_PATTERN": {
+      "win": [
+        "",
+        "python ${cfgSetScriptWin} set --board=${demoChipBoard}",
+        "",
+        "python ${cfgSetScriptWin} set --appdir=${demoPath}/${defaultDemoPathName}"
+      ],
+      "linux": []
+    },
+    "BUILD_IMAGE_PATTERN": {
+      "win": [
+        "python qccsdk.py set --appdir=demo/${defaultDemoPathName} build --build"
+      ],
+      "linux": []
+    },
+    "CLEAN_IMAGE_PATTERN": {
+      "win": [
+        "python qccsdk.py set --appdir=demo/${defaultDemoPathName} build --clean"
+      ],
+      "linux": []
+    },
+    "FLASH_PATTERN": {
+      "win": [
+        "python qccsdk.py set --appdir=demo/${defaultDemoPathName} flash --flash",
+        "python qccsdk.py set --appdir=demo/${defaultDemoPathName} flash --flash --reset"
+      ],
+      "linux": []
+    }
+  },
+  {
+    "3": "Used and updated by extension, you should not change it manually if you don't know why",
+    "prjName": "qcc730PosixDemo",
+    "IDEVer": "^0.5.6",
+    "sdkName": "qccsdk_qcc730",
+    "sdkVer": "1.0.0",
+    "activated": false,
+    "chipID": "QCC730",
+    "chipVersion": "v2",
+    "chipTarget": "QCC730",
+    "toolchainName": "arm-none-eabi-gcc",
+    "sdkPath": "",
+    "demoPath": "./demo",
+    "demoRTOS": "",
+    "demoChipBoard": "mqm730i",
+    "demoBuildScriptWin": "qccsdk.py",
+    "demoBuildScriptLinux": "qccsdk.py",
+    "demoFlashScriptWin": "qccsdk.py",
+    "demoFlashScriptLinux": "qccsdk.py",
+    "cfgSetScriptWin": "qccsdk.py",
+    "cfgSetScriptLinux": "qccsdk.py",
+    "defaultDemo": "FERMION_POSIX_DEMO",
+    "defaultDemoPathName": "posix_demo",
+    "buildRunPath": "./",
+    "flashRunPath": "./",
+    "entryFun": "app_main",
+    "elfName": "FERMION_POSIX_DEMO.elf",
+    "elfPath": "./output/${demoChipBoard}/${defaultDemo}/DEBUG/bin/${elfName}",
+    "gdbInitFilePath": "./tools/jtag/openocd/ch347/gdb_for_qccide.gdbinit",
+    "openocdGdbServerFilePath": "./tools/jtag/openocd/ch347/qcc730.cfg",
+    "boardList": [
+      "cqm730x",
+      "cqm730i",
+      "mqm730x",
+      "mqm730i",
+      "mqm405x",
+      "mqm405i",
+      "qcc730v2_socket",
+      "qcc730v2_evb11_hostless",
+      "qcc730v2_evb13_hostless",
+      "qcc730v2_evb12_hostless"
+    ],
+    "incPaths": [
+      "./demo/posix_demo",
+      "./output/${demoChipBoard}/${defaultDemo}"
+    ],
+    "SET_CFG_PATTERN": {
+      "win": [
+        "",
+        "python ${cfgSetScriptWin} set --board=${demoChipBoard}",
+        "",
+        "python ${cfgSetScriptWin} set --appdir=${demoPath}/${defaultDemoPathName}"
+      ],
+      "linux": []
+    },
+    "BUILD_IMAGE_PATTERN": {
+      "win": [
+        "python qccsdk.py set --appdir=demo/${defaultDemoPathName} build --build"
+      ],
+      "linux": []
+    },
+    "CLEAN_IMAGE_PATTERN": {
+      "win": [
+        "python qccsdk.py set --appdir=demo/${defaultDemoPathName} build --clean"
+      ],
+      "linux": []
+    },
+    "FLASH_PATTERN": {
+      "win": [
+        "python qccsdk.py set --appdir=demo/${defaultDemoPathName} flash --flash",
+        "python qccsdk.py set --appdir=demo/${defaultDemoPathName} flash --flash --reset"
+      ],
+      "linux": []
+    }
+  },
+  {
+    "4": "Used and updated by extension, you should not change it manually if you don't know why",
+    "prjName": "qcc730Sbl",
+    "IDEVer": "^0.5.6",
+    "sdkName": "qccsdk_qcc730",
+    "sdkVer": "1.0.0",
+    "activated": false,
+    "chipID": "QCC730",
+    "chipVersion": "v2",
+    "chipTarget": "QCC730",
+    "toolchainName": "arm-none-eabi-gcc",
+    "sdkPath": "c:\\qcc7030\\qcc7030sdk\\qccsdk",
+    "demoPath": "./bootloader/SBL",
+    "demoRTOS": "",
+    "demoChipBoard": "mqm730i",
+    "demoBuildScriptWin": "qccsdk.py",
+    "demoBuildScriptLinux": "qccsdk.py",
+    "demoFlashScriptWin": "qccsdk.py",
+    "demoFlashScriptLinux": "qccsdk.py",
+    "cfgSetScriptWin": "qccsdk.py",
+    "cfgSetScriptLinux": "qccsdk.py",
+    "defaultDemo": "FERMION_SBL",
+    "defaultDemoPathName": "",
+    "buildRunPath": "./",
+    "flashRunPath": "./",
+    "entryFun": "app_main",
+    "elfName": "FERMION_SBL.elf",
+    "elfPath": "",
+    "gdbInitFilePath": "./tools/jtag/openocd/ch347/gdb_for_qccide.gdbinit",
+    "openocdGdbServerFilePath": "./tools/jtag/openocd/ch347/qcc730.cfg",
+    "boardList": [
+      "cqm730x",
+      "cqm730i",
+      "mqm730x",
+      "mqm730i",
+      "mqm405x",
+      "mqm405i",
+      "qcc730v2_socket",
+      "qcc730v2_evb11_hostless",
+      "qcc730v2_evb13_hostless",
+      "qcc730v2_evb12_hostless"
+    ],
+    "incPaths": [
+      "./bootloader/SBL",
+      "./output/${demoChipBoard}/${defaultDemo}"
+    ],
+    "SET_CFG_PATTERN": {
+      "win": [
+        "",
+        "python ${cfgSetScriptWin} set --board=${demoChipBoard}",
+        "",
+        "python ${cfgSetScriptWin} set --appdir=sbl"
+      ],
+      "linux": []
+    },
+    "BUILD_IMAGE_PATTERN": {
+      "win": [
+        "python qccsdk.py set --appdir=sbl build --build"
+      ],
+      "linux": []
+    },
+    "CLEAN_IMAGE_PATTERN": {
+      "win": [
+        "python qccsdk.py set --appdir=sbl build --clean"
+      ],
+      "linux": []
+    },
+    "FLASH_PATTERN": {
+      "win": [],
+      "linux": []
+    }
+  },
+  {
+    "5": "Used and updated by extension, you should not change it manually if you don't know why",
+    "prjName": "qcc730HelloWorld",
+    "IDEVer": "^0.5.6",
+    "sdkName": "qccsdk_qcc730",
+    "sdkVer": "1.0.0",
+    "activated": false,
+    "chipID": "QCC730",
+    "chipVersion": "v2",
+    "chipTarget": "QCC730",
+    "toolchainName": "arm-none-eabi-gcc",
+    "sdkPath": "c:\\qcc7030\\qcc7030sdk\\qccsdk",
+    "demoPath": "./demo",
+    "demoRTOS": "",
+    "demoChipBoard": "mqm730i",
+    "demoBuildScriptWin": "qccsdk.py",
+    "demoBuildScriptLinux": "qccsdk.py",
+    "demoFlashScriptWin": "qccsdk.py",
+    "demoFlashScriptLinux": "qccsdk.py",
+    "cfgSetScriptWin": "qccsdk.py",
+    "cfgSetScriptLinux": "qccsdk.py",
+    "defaultDemo": "FERMION_HELLO_WORLD",
+    "defaultDemoPathName": "hello_world",
+    "buildRunPath": "./",
+    "flashRunPath": "./",
+    "entryFun": "app_main",
+    "elfName": "FERMION_HELLO_WORLD.elf",
+    "elfPath": "./output/${demoChipBoard}/${defaultDemo}/DEBUG/bin/${elfName}",
+    "gdbInitFilePath": "./tools/jtag/openocd/ch347/gdb_for_qccide.gdbinit",
+    "openocdGdbServerFilePath": "./tools/jtag/openocd/ch347/qcc730.cfg",
+    "boardList": [
+      "cqm730x",
+      "cqm730i",
+      "mqm730x",
+      "mqm730i",
+      "mqm405x",
+      "mqm405i",
+      "qcc730v2_socket",
+      "qcc730v2_evb11_hostless",
+      "qcc730v2_evb13_hostless",
+      "qcc730v2_evb12_hostless"
+    ],
+    "incPaths": [
+      "./demo/hello_world",
+      "./output/${demoChipBoard}/${defaultDemo}"
+    ],
+    "SET_CFG_PATTERN": {
+      "win": [
+        "",
+        "python ${cfgSetScriptWin} set --board=${demoChipBoard}",
+        "",
+        "python ${cfgSetScriptWin} set --appdir=${demoPath}/${defaultDemoPathName}"
+      ],
+      "linux": []
+    },
+    "BUILD_IMAGE_PATTERN": {
+      "win": [
+        "python qccsdk.py set --appdir=demo/${defaultDemoPathName} build --build"
+      ],
+      "linux": []
+    },
+    "CLEAN_IMAGE_PATTERN": {
+      "win": [
+        "python qccsdk.py set --appdir=demo/${defaultDemoPathName} build --clean"
+      ],
+      "linux": []
+    },
+    "FLASH_PATTERN": {
+      "win": [
+        "python qccsdk.py set --appdir=demo/${defaultDemoPathName} flash --flash",
+        "python qccsdk.py set --appdir=demo/${defaultDemoPathName} flash --flash --reset"
+      ],
+      "linux": []
+    }
+  },
+  {
+    "6": "Used and updated by extension, you should not change it manually if you don't know why",
+    "prjName": "qcc730NVMPrg",
+    "IDEVer": "^0.5.6",
+    "sdkName": "qccsdk_qcc730",
+    "sdkVer": "1.0.0",
+    "activated": false,
+    "chipID": "QCC730",
+    "chipVersion": "v2",
+    "chipTarget": "QCC730",
+    "toolchainName": "arm-none-eabi-gcc",
+    "sdkPath": "c:\\qcc7030\\qcc7030sdk\\qccsdk",
+    "demoPath": "./tools/nvm_programmer",
+    "demoRTOS": "",
+    "demoChipBoard": "mqm730i",
+    "demoBuildScriptWin": "qccsdk.py",
+    "demoBuildScriptLinux": "qccsdk.py",
+    "demoFlashScriptWin": "qccsdk.py",
+    "demoFlashScriptLinux": "qccsdk.py",
+    "cfgSetScriptWin": "qccsdk.py",
+    "cfgSetScriptLinux": "qccsdk.py",
+    "defaultDemo": "FERMION_NVM_PROGRAMMER",
+    "defaultDemoPathName": "",
+    "buildRunPath": "./",
+    "flashRunPath": "./",
+    "entryFun": "app_main",
+    "elfName": "FERMION_NVM_PROGRAMMER.elf",
+    "elfPath": "./output/${demoChipBoard}/${defaultDemo}/DEBUG/bin/${elfName}",
+    "gdbInitFilePath": "./tools/jtag/openocd/ch347/gdb_for_qccide.gdbinit",
+    "openocdGdbServerFilePath": "./tools/jtag/openocd/ch347/qcc730.cfg",
+    "boardList": [
+      "cqm730x",
+      "cqm730i",
+      "mqm730x",
+      "mqm730i",
+      "mqm405x",
+      "mqm405i",
+      "qcc730v2_socket",
+      "qcc730v2_evb11_hostless",
+      "qcc730v2_evb13_hostless",
+      "qcc730v2_evb12_hostless"
+    ],
+    "incPaths": [
+      "./tools/nvm_programmer",
+      "./output/${demoChipBoard}/${defaultDemo}"
+    ],
+    "SET_CFG_PATTERN": {
+      "win": [
+        "",
+        "python ${cfgSetScriptWin} set --board=${demoChipBoard}",
+        "",
+        "python ${cfgSetScriptWin} set --appdir=prg"
+      ],
+      "linux": []
+    },
+    "BUILD_IMAGE_PATTERN": {
+      "win": [
+        "python qccsdk.py set --appdir=prg build --build"
+      ],
+      "linux": []
+    },
+    "CLEAN_IMAGE_PATTERN": {
+      "win": [
+        "python qccsdk.py set --appdir=prg build --clean"
+      ],
+      "linux": []
+    },
+    "FLASH_PATTERN": {
+      "win": [],
+      "linux": []
+    }
+  },
+  {
+    "7": "Used and updated by extension, you should not change it manually if you don't know why",
+    "prjName": "qcc730QATDemo",
+    "IDEVer": "^0.5.6",
+    "sdkName": "qccsdk_qcc730",
+    "sdkVer": "1.0.0",
+    "activated": false,
+    "chipID": "QCC730",
+    "chipVersion": "v2",
+    "chipTarget": "QCC730",
+    "toolchainName": "arm-none-eabi-gcc",
+    "sdkPath": "c:\\qcc7030\\qcc7030sdk\\qccsdk",
+    "demoPath": "./demo",
+    "demoRTOS": "",
+    "demoChipBoard": "mqm730i",
+    "demoBuildScriptWin": "qccsdk.py",
+    "demoBuildScriptLinux": "qccsdk.py",
+    "demoFlashScriptWin": "qccsdk.py",
+    "demoFlashScriptLinux": "qccsdk.py",
+    "cfgSetScriptWin": "qccsdk.py",
+    "cfgSetScriptLinux": "qccsdk.py",
+    "defaultDemo": "FERMION_QAT_DEMO",
+    "defaultDemoPathName": "qat_demo",
+    "buildRunPath": "./",
+    "flashRunPath": "./",
+    "entryFun": "app_main",
+    "elfName": "FERMION_QAT_DEMO.elf",
+    "elfPath": "./output/${demoChipBoard}/${defaultDemo}/DEBUG/bin/${elfName}",
+    "gdbInitFilePath": "./tools/jtag/openocd/ch347/gdb_for_qccide.gdbinit",
+    "openocdGdbServerFilePath": "./tools/jtag/openocd/ch347/qcc730.cfg",
+    "boardList": [
+      "cqm730x",
+      "cqm730i",
+      "mqm730x",
+      "mqm730i",
+      "mqm405x",
+      "mqm405i",
+      "qcc730v2_socket",
+      "qcc730v2_evb11_hostless",
+      "qcc730v2_evb13_hostless",
+      "qcc730v2_evb12_hostless"
+    ],
+    "incPaths": [
+      "./demo/qat_demo",
+      "./output/${demoChipBoard}/${defaultDemo}"
+    ],
+    "SET_CFG_PATTERN": {
+      "win": [
+        "",
+        "python ${cfgSetScriptWin} set --board=${demoChipBoard}",
+        "",
+        "python ${cfgSetScriptWin} set --appdir=${demoPath}/${defaultDemoPathName}"
+      ],
+      "linux": []
+    },
+    "BUILD_IMAGE_PATTERN": {
+      "win": [
+        "python qccsdk.py set --appdir=demo/${defaultDemoPathName} build --build"
+      ],
+      "linux": []
+    },
+    "CLEAN_IMAGE_PATTERN": {
+      "win": [
+        "python qccsdk.py set --appdir=demo/${defaultDemoPathName} build --clean"
+      ],
+      "linux": []
+    },
+    "FLASH_PATTERN": {
+      "win": [
+        "python qccsdk.py set --appdir=demo/${defaultDemoPathName} flash --flash",
+        "python qccsdk.py set --appdir=demo/${defaultDemoPathName} flash --flash --bdf --reset"
+      ],
+      "linux": []
+    }
+  }
+]

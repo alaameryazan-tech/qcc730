@@ -1,0 +1,27 @@
+# Copyright (c) 2024 Qualcomm Innovation Center, Inc. All rights reserved.
+# SPDX-License-Identifier: BSD-3-Clause-Clear
+#
+
+
+default_configs = [
+    "//:default_config",
+    "//build/gn/toolchain:common_cflags"
+]
+
+set_defaults("executable") {
+  configs = default_configs
+}
+
+set_defaults("source_set") {
+  configs = default_configs
+}
+
+set_defaults("static_library") {
+  configs = default_configs
+}
+
+set_defaults("shared_library") {
+  configs = default_configs
+}
+
+set_default_toolchain("../toolchain:arm_gcc")

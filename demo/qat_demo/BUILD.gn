@@ -1,0 +1,106 @@
+# Copyright (c) 2024 Qualcomm Innovation Center, Inc. All rights reserved.
+#SPDX-License-Identifier: BSD-3-Clause-Clear
+#
+#import("${root_build_dir}/mainconfig.gni")
+import("//configs_decl.gni")
+
+qat_inc = [
+    "src",
+    "//modules/qat",
+]
+
+qat_src = [
+    "src/qat_demo_main.c"
+]
+
+if (CONFIG_QAT_COMMON_DEMO) {
+    qat_src += [
+        "src/qat_common_demo.c",
+    ]
+}
+
+if (CONFIG_QAT_MQTT_DEMO) {
+    qat_inc += [
+        "//modules/net/mqtt_client",
+        "../../../../comp/backoffAlgorithm/source/include",
+        "../../../../comp/mqtt/source/interface",
+        "../../../../comp/mqtt/source/include",
+    ]
+
+    qat_src += [
+       "src/qat_mqtt_demo.c",
+    ]
+}
+
+if (CONFIG_QAT_TCPIP_DEMO) {
+    qat_inc += [
+        "//modules/net/lwip",
+    ]
+
+    qat_src += [
+        "src/qat_tcpip_demo.c",
+    ]
+}
+
+if (CONFIG_QAT_WLAN_DEMO) {
+    qat_inc += [
+        "//modules/fs",
+    ]
+    qat_src += [
+        "src/qat_wlan_demo.c",
+    ]
+}
+
+if (CONFIG_QAT_HTTP_SERVER_DEMO) {
+    qat_inc += [
+        "//modules/net/httpd",
+    ]
+
+    qat_src += [
+        "src/qat_http_server_demo.c",
+    ]
+}
+
+if (CONFIG_QAT_HTTPC_DEMO) {
+    qat_src += [
+        "src/qat_httpc_demo.c",
+    ]
+}
+
+if (CONFIG_QAT_OTA_DEMO) {
+    qat_inc += [
+        "//demo/common/ota/plugins/http",
+    ]
+    qat_src += [
+        "src/qat_ota_demo.c",
+    ]
+}
+
+if (CONFIG_QAT_FSTORE_DEMO) {
+    qat_inc += [
+        "//modules/fs",
+    ]
+    qat_src += [
+        "src/qat_fstore_demo.c",
+    ]
+}
+
+if (CONFIG_QAT_POWERSAVE_DEMO) {
+    qat_src += [
+        "src/qat_powersave_demo.c",
+    ]
+}
+
+not_needed("*", [ ])
+
+config("_config") {
+    if (image_name == "FERMION_QAT_DEMO") {
+        include_dirs = qat_inc
+    }
+}
+
+source_set("qat_demo") {
+    if (image_name == "FERMION_QAT_DEMO") {
+        sources = qat_src
+    }
+}

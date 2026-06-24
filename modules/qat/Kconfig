@@ -1,0 +1,42 @@
+menu "qat setting"
+config QAT
+    bool "enable QAT"
+    default n
+config QAT_COMMON_DEMO
+    bool "enable QAT COMMON DEMO"
+    default n
+config QAT_TRANSMISSION_MODULE
+    int "change transmission module for QAT. 0:UART, 1:SPI"
+    default 0
+config QAT_TCPIP_DEMO
+    bool "enable QAT TCPIP DEMO"
+    default n
+config QAT_WLAN_DEMO
+    bool "enable QAT WLAN DEMO"
+    default n
+config QAT_MQTT_DEMO
+    bool "enable QAT MQTT DEMO"
+    default n
+config QAT_HTTP_SERVER_DEMO
+    bool "enable QAT HTTP_SERVER DEMO"
+    default n
+config QAT_HTTPC_DEMO
+    bool "enable QAT HTTPC DEMO"
+    default n
+config QAT_OTA_DEMO
+    bool "enable QAT OTA DEMO"
+    default n
+config QAT_FSTORE_DEMO
+    bool "enable QAT FSTORE DEMO (AT+WRITEFILE/READFILE/DELFILE)"
+    default n
+config QAT_POWERSAVE_DEMO
+    bool "enable QAT POWERSAVE DEMO"
+    default n
+config QAT_CB_SIZE_MTU_MULTIPLIER
+    int "Set the circular buffer size to be a multiple of the MTU."
+    default 10
+
+config QAT_CB_QUEUE_MAX_LENGTH
+    int "set max length of the circular buffer queue"
+    default 10
+endmenu

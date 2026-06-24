@@ -1,0 +1,36 @@
+menu "WiFi setting"
+rsource "Kconfig.rtt"
+rsource "Kconfig.wapp"
+rsource "Kconfig.lib"
+
+menu "System Setting"
+config PBL_PREES_GPIO_RESTORE
+	bool "Restore GPIO to reset state, so to fix pre-ES PBL wrong operation on GPIO. If ioe_PBL released, please default to n"
+	default y
+
+config PBL_PREES_RESET_FOR_DTIM
+	bool "A reset with CFG_FORCE_NPS_PD_ON is needed for Sleep function. If ioe_PBL released, please default to n"
+	default n
+
+config RING_IF_ONLY
+        bool "Enable RingIF for hosted mode. if hostless mode, please default to n"
+        default n
+
+config QCSPI_HFC_TEST 
+        bool "Enable QCSPI Slave HFC test demo. if QCSPI HFC test demo is not needed , please default to n"
+        default n
+
+config QCSPI_HFC_ATCMD_ENABLE 
+        bool "Enable AT command over QCSPI. if AT Command over QCSPI is not needed , please default to n"
+        default n
+
+config ENABLE_P2P_MODE
+	bool "P2p mode. Please default to n"
+	default n
+
+config ENABLE_P2P_LIB
+    bool "enable p2p lib support"
+    default n
+
+endmenu
+endmenu

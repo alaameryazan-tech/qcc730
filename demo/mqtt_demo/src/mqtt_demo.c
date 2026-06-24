@@ -84,10 +84,26 @@ static qapi_Status_t wlan_Connect()
     qapi_Status_t ret = QAPI_OK;
     int ssidLength = 0;
     char *ssid = NULL;
+    qapi_WLAN_Auth_Mode_e authMode = QAPI_WLAN_AUTH_WPA2_PSK_E;
+    qapi_WLAN_Crypt_Type_e cipherType = QAPI_WLAN_CRYPT_AES_CRYPT_E;
+    char *passphrase = WLAN_AP_PASSPHRASE;
+
+    qapi_WLAN_Set_Param(DEV_STA_ID, __QAPI_WLAN_PARAM_GROUP_WIRELESS_SECURITY,
+                        __QAPI_WLAN_PARAM_GROUP_SECURITY_AUTH_MODE,
+                        (void *)&authMode, sizeof(authMode), FALSE);
+
+    qapi_WLAN_Set_Param(DEV_STA_ID, __QAPI_WLAN_PARAM_GROUP_WIRELESS_SECURITY,
+                        __QAPI_WLAN_PARAM_GROUP_SECURITY_ENCRYPTION_TYPE,
+                        (void *)&cipherType, sizeof(cipherType), FALSE);
+
+    qapi_WLAN_Set_Param(DEV_STA_ID, __QAPI_WLAN_PARAM_GROUP_WIRELESS_SECURITY,
+                        __QAPI_WLAN_PARAM_GROUP_SECURITY_PASSPHRASE,
+                        (void *)passphrase, strlen(passphrase), FALSE);
 
     ssid = WLAN_AP_SSID;
     ssidLength = strlen(ssid);
-    qapi_WLAN_Set_Param(DEV_STA_ID, __QAPI_WLAN_PARAM_GROUP_WIRELESS, __QAPI_WLAN_PARAM_GROUP_WIRELESS_SSID,
+    qapi_WLAN_Set_Param(DEV_STA_ID, __QAPI_WLAN_PARAM_GROUP_WIRELESS,
+                        __QAPI_WLAN_PARAM_GROUP_WIRELESS_SSID,
                         (void *)ssid, ssidLength, FALSE);
 
     ret = qapi_WLAN_Commit(DEV_STA_ID);

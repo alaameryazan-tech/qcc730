@@ -6,6 +6,13 @@
 #ifndef __I2C_DEMO_H__
 #define __I2C_DEMO_H__
 
+#include <stdint.h>
+
+/* Callback: called after every successful SHT40 rawslave read (6 bytes).
+   Values are scaled x10: e.g. 253 means 25.3 */
+typedef void (*SHT40_Callback_t)(int32_t temp_x10, int32_t rh_x10);
+void i2c_demo_set_sht40_callback(SHT40_Callback_t cb);
+
 /**
    @brief Open I2C Master Instance.
 

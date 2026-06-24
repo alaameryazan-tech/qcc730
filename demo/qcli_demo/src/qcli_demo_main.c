@@ -20,6 +20,83 @@
 #include <nt_ftm.h>
 
 #include "wlan_dev.h"
+#include "qapi_wlan.h"
+#include "qurt_internal.h"
+#include "safeAPI.h"
+#include "ip_addr.h"
+#include "netif.h"
+#include "dhcp.h"
+#include "network_al.h"
+
+#define WIFI_SSID        "FRITZ!Box7590AX"
+#define WIFI_PASSPHRASE  "Tech91847"
+#define WIFI_DEV_STA_ID  1
+
+static volatile qbool_t g_wifi_auto_connected = false;
+
+static void wifi_auto_event_cb(__unused uint8_t deviceId, uint32_t cbId,
+                               __unused void *pAppCtx, void *payload,
+                               __unused uint32_t len)
+{
+    if (cbId == QAPI_WLAN_CONNECT_CB_E) {
+        qapi_WLAN_Join_Comp_Evt_t *info = (qapi_WLAN_Join_Comp_Evt_t *)payload;
+        if (info->evt_hdr.status == QAPI_OK && info->bss_Connection_Status) {
+            g_wifi_auto_connected = true;
+            printf("WiFi: connected to %s\n", WIFI_SSID);
+        } else {
+            printf("WiFi: connect failed, reason %d\n", info->reason_code);
+        }
+    }
+}
+
+static void wifi_auto_connect_task(__unused void *arg)
+{
+    qapi_WLAN_DEV_Mode_e devMode   = DEV_MODE_STATION_E;
+    qapi_WLAN_Auth_Mode_e authMode = QAPI_WLAN_AUTH_WPA3_SAE_E; /* WPA3-Personal (SAE) */
+    qapi_WLAN_Crypt_Type_e cipher  = QAPI_WLAN_CRYPT_AES_CRYPT_E;
+    const char *ssid       = WIFI_SSID;
+    const char *passphrase = WIFI_PASSPHRASE;
+
+    qapi_WLAN_Set_Callback(wifi_auto_event_cb, NULL);
+    qapi_WLAN_Enable(true);
+
+    qapi_WLAN_Set_Param(WIFI_DEV_STA_ID, __QAPI_WLAN_PARAM_GROUP_WIRELESS,
+                        __QAPI_WLAN_PARAM_GROUP_WIRELESS_OPERATION_MODE,
+                        &devMode, sizeof(devMode), FALSE);
+
+    qapi_WLAN_Set_Param(WIFI_DEV_STA_ID, __QAPI_WLAN_PARAM_GROUP_WIRELESS_SECURITY,
+                        __QAPI_WLAN_PARAM_GROUP_SECURITY_AUTH_MODE,
+                        &authMode, sizeof(authMode), FALSE);
+
+    qapi_WLAN_Set_Param(WIFI_DEV_STA_ID, __QAPI_WLAN_PARAM_GROUP_WIRELESS_SECURITY,
+                        __QAPI_WLAN_PARAM_GROUP_SECURITY_ENCRYPTION_TYPE,
+                        &cipher, sizeof(cipher), FALSE);
+
+    qapi_WLAN_Set_Param(WIFI_DEV_STA_ID, __QAPI_WLAN_PARAM_GROUP_WIRELESS_SECURITY,
+                        __QAPI_WLAN_PARAM_GROUP_SECURITY_PASSPHRASE,
+                        (void *)passphrase, strlen(passphrase), FALSE);
+
+    qapi_WLAN_Set_Param(WIFI_DEV_STA_ID, __QAPI_WLAN_PARAM_GROUP_WIRELESS,
+                        __QAPI_WLAN_PARAM_GROUP_WIRELESS_SSID,
+                        (void *)ssid, strlen(ssid), FALSE);
+
+    qapi_WLAN_Commit(WIFI_DEV_STA_ID);
+
+    while (!g_wifi_auto_connected) {
+        qurt_thread_sleep(200);
+    }
+
+    uint8_t netid = nt_get_netifidx_by_devmode(STA_DEVICE);
+    struct netif *netif = netif_get_by_index(netid);
+    if (netif) {
+        netif_set_addr(netif, IP4_ADDR_ANY4, IP4_ADDR_ANY4, IP4_ADDR_ANY4);
+        if (dhcp_start(netif) == ERR_OK) {
+            printf("WiFi: DHCP started\n");
+        }
+    }
+
+    nt_osal_thread_delete(NULL);
+}
 #ifdef CONFIG_FWUP_DEMO
 #include "ota_demo.h"
 #endif
@@ -295,6 +372,9 @@ void app_main(void)
     UART_SEND_DIRECT("app_main entry\r\n");
     UART_SEND_DIRECT("qcli demo!\r\n");
     Initialize_RTT_Demo();
+
+    nt_qurt_thread_create(wifi_auto_connect_task, "wifi_auto_task", 4096, NULL, 6, NULL);
+
     if (dead_loop) {
         UART_SEND_DIRECT("Dead loop...\r\n");
         while (dead_loop)

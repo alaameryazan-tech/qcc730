@@ -7,7 +7,7 @@ gen_part_table.py --output=C:\qcc7030\qcc7030sdk\qccsdk\tools\fw_upgrade\generat
    <instructions erase_block_size_bytes="4096" table_align_size_bytes="4096"/>
    <table>
       <header rank="1" signature="0x54445746" status="1" version="1"/>
-      <partition dirname="C:\qcc7030\qcc7030sdk\qccsdk\output\mqm730i\FERMION_IOE_QCLI_DEMO\DEBUG\bin" filename="FERMION_IOE_QCLI_DEMO_HASHED.elf" image_id="10" start_block="67" size_in_kb="1128"/> <!--10-->
+      <partition dirname="C:\qcc7030\qcc7030sdk\qccsdk\output\mqm730i\FERMION_IOE_QCLI_DEMO\DEBUG\bin" filename="FERMION_IOE_QCLI_DEMO_HASHED.elf" image_id="10" start_block="67" size_in_kb="1129"/> <!--10-->
       <partition filename="" image_id="5" start_block="3" size_in_kb="64"/> <!--Primary Filesystem-->
       <partition filename="" image_id="128" start_block="19" size_in_kb="64"/> <!--Secondary Filesystem-->
       <partition filename="" image_id="129" start_block="1" size_in_kb="8"/> <!--Unused-->

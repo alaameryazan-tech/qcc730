@@ -1,3 +1,3 @@
-2026-06-24 16:41:21 DEBUG [2026-06-24 16:41:21] set.py Started. 
-2026-06-24 16:41:21 WARNING CfgExternal['qccsdk'][appdir]==demo/qcli_demo, skip
-2026-06-24 16:41:21 DEBUG [2026-06-24 16:41:21] set.py Succeeded. 
+2026-06-26 10:19:51 DEBUG [2026-06-26 10:19:51] set.py Started. 
+2026-06-26 10:19:51 WARNING CfgExternal['qccsdk'][appdir]==demo/qcli_demo, skip
+2026-06-26 10:19:51 DEBUG [2026-06-26 10:19:51] set.py Succeeded. 

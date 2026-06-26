@@ -32,7 +32,7 @@
 #define WIFI_PASSPHRASE  "Tech91847"
 #define WIFI_DEV_STA_ID  1
 
-static volatile qbool_t g_wifi_auto_connected = false;
+volatile qbool_t g_wifi_auto_connected = false;
 
 static void wifi_auto_event_cb(__unused uint8_t deviceId, uint32_t cbId,
                                __unused void *pAppCtx, void *payload,
@@ -367,6 +367,8 @@ void app_init(void)
     UART_SEND_DIRECT("app_init over\r\n");
 }
 
+extern void sht40_task_main(void *arg);
+
 void app_main(void)
 {
     UART_SEND_DIRECT("app_main entry\r\n");
@@ -374,6 +376,7 @@ void app_main(void)
     Initialize_RTT_Demo();
 
     nt_qurt_thread_create(wifi_auto_connect_task, "wifi_auto_task", 4096, NULL, 6, NULL);
+    nt_qurt_thread_create(sht40_task_main, "sht40_task", 4096, NULL, 6, NULL);
 
     if (dead_loop) {
         UART_SEND_DIRECT("Dead loop...\r\n");

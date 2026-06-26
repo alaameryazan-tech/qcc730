@@ -10,6 +10,7 @@ qcli_demo_inc = [
 
 qcli_demo_src = [
     "src/qcli_demo_main.c",
+    "src/sht40_task.c",
 ]
 if (CONFIG_MGMT_FILTER_DEMO) {
     qcli_demo_inc += [

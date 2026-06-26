@@ -25,9 +25,11 @@
 #define SHT40_I2C_ADDR           0x44
 #define SHT40_CMD_MEAS           0xFD
 
-#define MQTT_BROKER              "192.168.80.163"
+#define MQTT_BROKER              "139.162.181.126"
 #define MQTT_PORT                1883
 #define MQTT_CLIENT_ID           "sht40_qcc7030"
+#define MQTT_USERNAME            "AABBCCDD"
+#define MQTT_PASSWORD            "KXL8DHPsXggvRELD"
 #define MQTT_TOPIC_PUB           "sensor/sht40"
 #define MQTT_TOPIC_CMD           "sensor/cmd"
 #define MQTT_NETWORK_BUF_SIZE    1024U
@@ -178,10 +180,10 @@ static int mqtt_connect_and_subscribe(void)
         .keepAliveSeconds       = MQTT_KEEPALIVE_SEC,
         .pClientIdentifier      = MQTT_CLIENT_ID,
         .clientIdentifierLength = sizeof(MQTT_CLIENT_ID) - 1,
-        .pUserName              = NULL,
-        .userNameLength         = 0,
-        .pPassword              = NULL,
-        .passwordLength         = 0,
+        .pUserName              = MQTT_USERNAME,
+        .userNameLength         = sizeof(MQTT_USERNAME) - 1,
+        .pPassword              = MQTT_PASSWORD,
+        .passwordLength         = sizeof(MQTT_PASSWORD) - 1,
     };
     bool session_present;
     if (MQTT_Connect(&s_mqtt_ctx, &conninfo, NULL,

@@ -42,7 +42,30 @@
 #define MQTT_CONNACK_TIMEOUT_MS     5000U
 #define MQTT_TRANSPORT_TIMEOUT_MS   1000U
 #define MQTT_PUBLISH_INTERVAL_MS    30000U
-#define MQTT_PROCESS_INTERVAL_MS    500U
+
+/* Set to 1 to publish a counter/uptime message every MQTT_PUBLISH_INTERVAL_MS
+ * once connected (useful for testing delivery timing under DTIM10). Set to
+ * 0 (default) to just establish WLAN + the MQTT connection and then stay
+ * fully idle in DTIM10 sleep - no periodic traffic at all - for a clean
+ * baseline sleep-current measurement. Either way, MQTT_ProcessLoop() still
+ * runs to service the connection (keepalive pings, incoming data), and the
+ * on-demand "measure" command on sensor/cmd still works for a manual
+ * one-off publish. */
+#define MQTT_AUTO_PUBLISH 0
+
+/* How often the task wakes to call MQTT_ProcessLoop(). Confirmed by log
+ * timestamps that a fast poll here (500ms) forces the board to wake ~2x
+ * more often than DTIM10's own ~1024ms cycle, which is why the DTIM10
+ * current target wasn't being hit - the polling loop itself, not the
+ * radio, was keeping the CPU busy. When idle (MQTT_AUTO_PUBLISH=0), poll
+ * far less often so DTIM10's own cadence dominates; MQTT keepalive (60s)
+ * has a wide safety margin against this. When actively testing publish
+ * timing (MQTT_AUTO_PUBLISH=1), keep it tight so publishes fire promptly. */
+#if MQTT_AUTO_PUBLISH
+#define MQTT_PROCESS_INTERVAL_MS 500U
+#else
+#define MQTT_PROCESS_INTERVAL_MS 10000U
+#endif
 
 #define info_printf(msg, ...) printf("MQTT_TEST: " msg, ##__VA_ARGS__)
 
@@ -209,8 +232,6 @@ static void mqtt_printf_task(void *arg)
 
         for (;;) {
             MQTTStatus_t st;
-            TickType_t now;
-            uint32_t elapsed;
 
             if (!g_wifi_ready) {
                 Plaintext_Disconnect(&s_net_ctx);
@@ -224,10 +245,16 @@ static void mqtt_printf_task(void *arg)
                 break;
             }
 
-            now = xTaskGetTickCount();
-            elapsed = (uint32_t)((now - last_pub) * portTICK_PERIOD_MS);
+#if MQTT_AUTO_PUBLISH
+            {
+                TickType_t now = xTaskGetTickCount();
+                uint32_t elapsed = (uint32_t)((now - last_pub) * portTICK_PERIOD_MS);
+                if (elapsed >= MQTT_PUBLISH_INTERVAL_MS)
+                    s_publish_now = 1;
+            }
+#endif /* MQTT_AUTO_PUBLISH */
 
-            if (s_publish_now || (elapsed >= MQTT_PUBLISH_INTERVAL_MS)) {
+            if (s_publish_now) {
                 s_counter++;
                 info_printf("publish #%lu\n", (unsigned long)s_counter);
                 if (mqtt_publish(s_counter) != 0) {

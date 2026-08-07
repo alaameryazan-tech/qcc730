@@ -71,6 +71,21 @@ extern uint32_t UART_Send_direct(char *txbuf, uint32_t buflen);
 #define POWERTEST_WIFI_SSID       "FRITZ!Box7590AX"
 #define POWERTEST_WIFI_PASSPHRASE "Tech91847"
 
+/* Automatically enter IMPS deep sleep a short while after connecting, so the
+ * board can be measured with no USB/console attached. Set to 0 to fall back
+ * to BMPS-only sleep (e.g. testable via the "lowpower" shell manually). */
+#define ENABLE_IMPS_DEEPSLEEP 1
+
+#if ENABLE_IMPS_DEEPSLEEP
+/* Time after connect before entering deep sleep - unplug USB within this
+ * window. */
+#define POWERTEST_IMPS_ENTER_DELAY_MS 5000U
+/* Passed to qapi_imps_enter_sleep(): how long to wait for WLAN reconnect
+ * after waking, and how long to stay in deep sleep, both in ms. */
+#define POWERTEST_IMPS_WAIT_MS        5000U
+#define POWERTEST_IMPS_SLEEP_MS       30000U
+#endif /* ENABLE_IMPS_DEEPSLEEP */
+
 #if ENABLE_SHT40_MQTT
 #define SHT40_I2C_ADDR              0x44
 #define SHT40_CMD_MEAS              0xFD
@@ -166,6 +181,9 @@ static volatile uint8_t s_mqtt_started;
 static uint8_t s_sht40_ready;
 #endif /* ENABLE_SHT40_MQTT */
 static uint8_t s_pm_enabled;
+#if ENABLE_IMPS_DEEPSLEEP
+static uint8_t s_imps_started;
+#endif /* ENABLE_IMPS_DEEPSLEEP */
 uint8_t g_wifi_ready = 0;
 uint8_t log_enable = 1;
 extern lpr_wmi_t g_lowpower_wmi;
@@ -173,9 +191,16 @@ extern wlan_qapi_cxt_t *gp_wlan_qapi_cxt;
 
 extern qapi_Status_t qapi_pm_enable(uint8_t enable);
 extern qapi_Status_t wmi_cmd_send(WMI_COMMAND_ID cmd_id, void *p_data, uint32_t data_len);
+#if ENABLE_IMPS_DEEPSLEEP
+extern qapi_Status_t qapi_imps_enter_sleep(uint8_t enable, uint32_t wait_time, uint32_t sleep_time);
+#endif /* ENABLE_IMPS_DEEPSLEEP */
 extern void qurt_thread_sleep(uint32 duration);
 
 void pm_enable(void);
+#if ENABLE_IMPS_DEEPSLEEP
+static TaskHandle_t imps_deepsleep_task_handle;
+static void powertest_imps_deepsleep_task(void *arg);
+#endif /* ENABLE_IMPS_DEEPSLEEP */
 
 #if ENABLE_SHT40_MQTT
 static uint8_t sht40_crc8(const uint8_t *data, uint32_t len)
@@ -510,6 +535,16 @@ static void wlan_shell_event_handler(__unused uint8_t deviceId, uint32_t cbId, v
             }
 #endif /* ENABLE_SHT40_MQTT */
             pm_enable();
+#if ENABLE_IMPS_DEEPSLEEP
+            if (!s_imps_started) {
+                if (nt_qurt_thread_create(powertest_imps_deepsleep_task, "powertest_imps_sleep",
+                        STA_TASK_STACK_SIZE, NULL, 5, &imps_deepsleep_task_handle) == pdPASS) {
+                    s_imps_started = 1;
+                } else {
+                    info_printf("powertest_imps_sleep create fail\n");
+                }
+            }
+#endif /* ENABLE_IMPS_DEEPSLEEP */
             if(roaming_timer != NULL) {
                 nt_stop_timer(roaming_timer);
             }
@@ -580,6 +615,22 @@ void pm_enable()
 
     s_pm_enabled = 1;
 }
+
+#if ENABLE_IMPS_DEEPSLEEP
+static void powertest_imps_deepsleep_task(void *arg)
+{
+    (void)arg;
+
+    info_printf("entering deep sleep (IMPS) in %u ms - unplug USB now if needed\n",
+        (unsigned)POWERTEST_IMPS_ENTER_DELAY_MS);
+    vTaskDelay(pdMS_TO_TICKS(POWERTEST_IMPS_ENTER_DELAY_MS));
+
+    info_printf("===== deep sleep (IMPS) =====\n");
+    qapi_imps_enter_sleep(1, POWERTEST_IMPS_WAIT_MS, POWERTEST_IMPS_SLEEP_MS);
+
+    vTaskDelete(NULL);
+}
+#endif /* ENABLE_IMPS_DEEPSLEEP */
 
 static TaskHandle_t wifi_auto_connect_task_handle;
 

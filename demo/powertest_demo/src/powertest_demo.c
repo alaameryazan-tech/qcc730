@@ -669,6 +669,22 @@ static void powertest_wifi_auto_connect_task(void *arg)
         __QAPI_WLAN_PARAM_GROUP_WIRELESS_SSID,
         (void *)ssid, strlen(ssid), FALSE);
 
+    /* Request DTIM 10 listen interval for lowest sleep-mode current draw.
+     * time = 1000 TU = 10 x 100 TU (default AP beacon interval), so the
+     * device wakes every 10th beacon/DTIM instead of every beacon.
+     * Trade-off: buffered-data response latency rises to ~10 beacon
+     * intervals (~1s), but sleep current drops (~45uA @ DTIM5 -> ~39uA
+     * target @ DTIM10 per datasheet). Must be set before qapi_WLAN_Commit()
+     * so it applies to this association attempt; firmware snaps to the
+     * closest DTIM the AP actually advertises.
+     */
+    qapi_WLAN_Listen_Interval_Params_t listen_interval;
+    listen_interval.time = 1000;
+    listen_interval.round_type = 0;
+    qapi_WLAN_Set_Param(DEV_STA_ID, __QAPI_WLAN_PARAM_GROUP_WIRELESS,
+        __QAPI_WLAN_PARAM_GROUP_WIRELESS_STA_LISTEN_INTERVAL_IN_TU,
+        &listen_interval, sizeof(listen_interval), FALSE);
+
     info_printf("auto-connecting to ssid %s\n", ssid);
     qapi_WLAN_Commit(DEV_STA_ID);
 

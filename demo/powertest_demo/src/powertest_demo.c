@@ -71,10 +71,23 @@ extern uint32_t UART_Send_direct(char *txbuf, uint32_t buflen);
 #define POWERTEST_WIFI_SSID       "FRITZ!Box7590AX"
 #define POWERTEST_WIFI_PASSPHRASE "Tech91847"
 
+/* Delay before engaging BMPS/DTIM10 sleep, so WLAN + the MQTT test
+ * publisher's first connect/publish have a full-power window to finish
+ * establishing before the radio starts duty-cycling on the DTIM10
+ * interval. pm_enable() still always fires after this delay regardless of
+ * whether MQTT succeeded, so the core DTIM10 sleep-test path is unaffected
+ * if the broker is unreachable. */
+#define POWERTEST_BMPS_ENTER_DELAY_MS 30000U
+
 /* Automatically enter IMPS deep sleep a short while after connecting, so the
  * board can be measured with no USB/console attached. Set to 0 to fall back
- * to BMPS-only sleep (e.g. testable via the "lowpower" shell manually). */
-#define ENABLE_IMPS_DEEPSLEEP 1
+ * to BMPS-only sleep (e.g. testable via the "lowpower" shell manually).
+ * Temporarily disabled: IMPS was engaging ~5s after connect, right in the
+ * middle of the MQTT test publisher's TCP connect attempt, and blocking it
+ * forever. DTIM10 (via BMPS) still applies with this at 0. Re-enable once
+ * MQTT connectivity under DTIM10 is confirmed, with IMPS entry delayed
+ * enough to let the first MQTT connect/publish complete first. */
+#define ENABLE_IMPS_DEEPSLEEP 0
 
 #if ENABLE_IMPS_DEEPSLEEP
 /* Time after connect before entering deep sleep - unplug USB within this
@@ -191,12 +204,27 @@ extern wlan_qapi_cxt_t *gp_wlan_qapi_cxt;
 
 extern qapi_Status_t qapi_pm_enable(uint8_t enable);
 extern qapi_Status_t wmi_cmd_send(WMI_COMMAND_ID cmd_id, void *p_data, uint32_t data_len);
+/* Starts the periodic MQTT test-message publisher (mqtt_printf_task.c);
+ * used to verify MQTT connectivity/timing under DTIM10 sleep without the
+ * SHT40 sensor. See mqtt_printf_task_start() call in the CONNECT handler
+ * below. */
+extern void mqtt_printf_task_start(void);
+/* Starts the DHCPv4 client on the STA netif (net_shell.c) - equivalent to
+ * running "dhcpv4c wlan1 new" on the console. Without this the STA netif
+ * stays on its unconfigured 127.0.0.1 default and every outbound
+ * connection (MQTT included) fails, since there's no real IP/gateway.
+ * Must run automatically since USB/console may be unplugged during the
+ * actual power test. */
+extern qapi_Status_t net_shell_start_dhcp_client(uint8_t devid);
 #if ENABLE_IMPS_DEEPSLEEP
 extern qapi_Status_t qapi_imps_enter_sleep(uint8_t enable, uint32_t wait_time, uint32_t sleep_time);
 #endif /* ENABLE_IMPS_DEEPSLEEP */
 extern void qurt_thread_sleep(uint32 duration);
 
 void pm_enable(void);
+static TaskHandle_t pm_enable_task_handle;
+static uint8_t s_pm_enable_task_started;
+static void powertest_pm_enable_task(void *arg);
 #if ENABLE_IMPS_DEEPSLEEP
 static TaskHandle_t imps_deepsleep_task_handle;
 static void powertest_imps_deepsleep_task(void *arg);
@@ -525,6 +553,13 @@ static void wlan_shell_event_handler(__unused uint8_t deviceId, uint32_t cbId, v
                 info_printf("4 way handshake success for device=1\n");
             }
             g_wifi_ready = 1;
+            /* Bring up a real IP address before anything tries to use the
+             * network - association alone doesn't get one. */
+            net_shell_start_dhcp_client(STA_DEVICE);
+            /* Start the MQTT test publisher (plain counter/uptime message
+             * every 5s, no SHT40 needed) so power/timing can be measured
+             * under DTIM10 sleep. */
+            mqtt_printf_task_start();
 #if ENABLE_SHT40_MQTT
             if (!s_mqtt_started) {
                 if (nt_qurt_thread_create(mqtt_sensor_task, "mqtt_sensor_task", STA_TASK_STACK_SIZE, NULL, 5, &mqtt_task_handle) == pdPASS) {
@@ -534,7 +569,14 @@ static void wlan_shell_event_handler(__unused uint8_t deviceId, uint32_t cbId, v
                 }
             }
 #endif /* ENABLE_SHT40_MQTT */
-            pm_enable();
+            if (!s_pm_enable_task_started) {
+                if (nt_qurt_thread_create(powertest_pm_enable_task, "powertest_pm_enable",
+                        STA_TASK_STACK_SIZE, NULL, 5, &pm_enable_task_handle) == pdPASS) {
+                    s_pm_enable_task_started = 1;
+                } else {
+                    info_printf("powertest_pm_enable create fail\n");
+                }
+            }
 #if ENABLE_IMPS_DEEPSLEEP
             if (!s_imps_started) {
                 if (nt_qurt_thread_create(powertest_imps_deepsleep_task, "powertest_imps_sleep",
@@ -614,6 +656,19 @@ void pm_enable()
     wmi_cmd_send(WMI_BMPS_ENABLE_CMDID, pdata2, sizeof(*pdata2));
 
     s_pm_enabled = 1;
+}
+
+static void powertest_pm_enable_task(void *arg)
+{
+    (void)arg;
+
+    info_printf("delaying BMPS/DTIM10 sleep by %u ms so WLAN+MQTT can fully establish first\n",
+        (unsigned)POWERTEST_BMPS_ENTER_DELAY_MS);
+    vTaskDelay(pdMS_TO_TICKS(POWERTEST_BMPS_ENTER_DELAY_MS));
+
+    pm_enable();
+
+    vTaskDelete(NULL);
 }
 
 #if ENABLE_IMPS_DEEPSLEEP

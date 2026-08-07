@@ -234,6 +234,28 @@ static qapi_Status_t dhcpv4c(uint32_t __attribute__((__unused__)) Parameter_Coun
 #endif
 }
 
+/* Non-shell entry point for other demos (e.g. powertest_demo) to start the
+ * DHCPv4 client on the STA interface programmatically, equivalent to
+ * running "dhcpv4c wlan1 new" from the console. Without this, a STA netif
+ * stays on its unconfigured default address (127.0.0.1) until DHCP is
+ * kicked off manually. */
+qapi_Status_t net_shell_start_dhcp_client(uint8_t devid)
+{
+#if NT_FN_DHCPS_V4 && LWIP_DHCP
+    struct netif *netif = get_netif_by_device(devid);
+
+    if (netif == NULL) {
+        info_printf("net_shell_start_dhcp_client: no netif for device %d\n", devid);
+        return QAPI_ERROR;
+    }
+
+    return net_enable_disable_dhcp(netif, 0, TURN_ON_DHCP);
+#else
+    (void)devid;
+    return QAPI_OK;
+#endif
+}
+
 #if LWIP_DNS
 void dnsc_found_callback(const char *name, const ip_addr_t *ipaddr, void *arg)
 {

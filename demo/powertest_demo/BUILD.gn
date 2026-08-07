@@ -28,6 +28,8 @@ powertest_demo_src = [
 
     "src/powertest_demo_main.c",
 
+    "src/mqtt_printf_task.c",
+
 ]
 
 

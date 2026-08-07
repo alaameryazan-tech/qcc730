@@ -51,4 +51,10 @@ typedef enum { FALSE = 0, TRUE = 1 } Boolean;
 
 void net_shell_init(void);
 
+/* Programmatic equivalent of "dhcpv4c <interface> new" from the console -
+ * starts the DHCPv4 client on the given device's netif (e.g. STA_DEVICE
+ * from data_path.h). Lets other demos bring up DHCP automatically after
+ * WLAN connect, without requiring a manual console command. */
+qapi_Status_t net_shell_start_dhcp_client(uint8_t devid);
+
 #endif  //]NET_SHELL_H

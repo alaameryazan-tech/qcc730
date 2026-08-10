@@ -61,7 +61,21 @@ extern uint32_t UART_Send_direct(char *txbuf, uint32_t buflen);
 #define UART_SEND_DIRECT(str)
 #endif
 
+/* Set to 0 to eliminate ALL console output from this file for an actual
+ * power measurement run - every printf() touches the UART peripheral,
+ * which costs power and may itself have been contributing to unexplained
+ * spikes. Set to 1 to get log visibility back for debugging. Must be
+ * flipped together with POWERTEST_DEBUG_LOG in mqtt_printf_task.c to
+ * fully silence the console. */
+#define POWERTEST_DEBUG_LOG 0
+
+#if POWERTEST_DEBUG_LOG
 #define info_printf(msg, ...) printf("WLAN: " msg, ##__VA_ARGS__)
+#else
+#define info_printf(msg, ...) \
+    do {                      \
+    } while (0)
+#endif
 
 #ifndef DEV_STA_ID
 #define DEV_STA_ID 1
@@ -725,17 +739,19 @@ static void powertest_wifi_auto_connect_task(void *arg)
         __QAPI_WLAN_PARAM_GROUP_WIRELESS_SSID,
         (void *)ssid, strlen(ssid), FALSE);
 
-    /* Request DTIM 10 listen interval for lowest sleep-mode current draw.
-     * time = 1000 TU = 10 x 100 TU (default AP beacon interval), so the
-     * device wakes every 10th beacon/DTIM instead of every beacon.
-     * Trade-off: buffered-data response latency rises to ~10 beacon
-     * intervals (~1s), but sleep current drops (~45uA @ DTIM5 -> ~39uA
-     * target @ DTIM10 per datasheet). Must be set before qapi_WLAN_Commit()
-     * so it applies to this association attempt; firmware snaps to the
-     * closest DTIM the AP actually advertises.
+    /* Experimental: DTIM20 (beyond the datasheet's documented DTIM10 low
+     * point) for even lower sleep-mode current draw. time = 2000 TU =
+     * 20 x 100 TU (default AP beacon interval), so the device wakes every
+     * 20th beacon/DTIM instead of every 10th. Undocumented territory -
+     * firmware "snaps to the closest DTIM the AP actually advertises", so
+     * if the AP doesn't support this deep an interval it'll just cap out
+     * at whatever it does support, no harm in trying. Trade-off:
+     * buffered-data response latency roughly doubles again vs DTIM10
+     * (~2s instead of ~1s). Must be set before qapi_WLAN_Commit() so it
+     * applies to this association attempt.
      */
     qapi_WLAN_Listen_Interval_Params_t listen_interval;
-    listen_interval.time = 1000;
+    listen_interval.time = 2000;
     listen_interval.round_type = 0;
     qapi_WLAN_Set_Param(DEV_STA_ID, __QAPI_WLAN_PARAM_GROUP_WIRELESS,
         __QAPI_WLAN_PARAM_GROUP_WIRELESS_STA_LISTEN_INTERVAL_IN_TU,

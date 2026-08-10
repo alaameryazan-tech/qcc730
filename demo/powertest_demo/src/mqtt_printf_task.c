@@ -80,7 +80,21 @@
  * the priority here is minimum wake count/power, not responsiveness. */
 #define MQTT_AUTO_PUBLISH 1
 
+/* Set to 0 to eliminate ALL console output from this file for an actual
+ * power measurement run - every printf() touches the UART peripheral,
+ * which costs power and may itself have been contributing to unexplained
+ * spikes. Set to 1 to get log visibility back for debugging. Must be
+ * flipped together with POWERTEST_DEBUG_LOG in powertest_demo.c to fully
+ * silence the console. */
+#define POWERTEST_DEBUG_LOG 0
+
+#if POWERTEST_DEBUG_LOG
 #define info_printf(msg, ...) printf("MQTT_TEST: " msg, ##__VA_ARGS__)
+#else
+#define info_printf(msg, ...) \
+    do {                      \
+    } while (0)
+#endif
 
 /* Set by powertest_demo.c once the WLAN CONNECT event / 4-way handshake
  * completes; also used to unwind this task's loops on disconnect. */

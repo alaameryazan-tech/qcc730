@@ -222,6 +222,7 @@ extern qapi_Status_t qapi_imps_enter_sleep(uint8_t enable, uint32_t wait_time, u
 extern void qurt_thread_sleep(uint32 duration);
 
 void pm_enable(void);
+uint8_t function_reconnect_cb(void);
 static TaskHandle_t pm_enable_task_handle;
 static uint8_t s_pm_enable_task_started;
 static void powertest_pm_enable_task(void *arg);
@@ -742,6 +743,30 @@ static void powertest_wifi_auto_connect_task(void *arg)
 
     info_printf("auto-connecting to ssid %s\n", ssid);
     qapi_WLAN_Commit(DEV_STA_ID);
+
+    /* Save connection info so function_reconnect_cb() (driven by
+     * roaming_timer below) can re-commit after an unexpected disconnect -
+     * mirrors what iperf_for_powertest() does, but wired into the actual
+     * boot-time auto-connect path instead of only firing as a side effect
+     * of the iperf shell command. Without this, roaming_timer stays NULL
+     * and a dropped AP association is never retried. */
+    memscpy(pg_wifi_demo_cxt.ssid, __QAPI_WLAN_MAX_SSID_LEN+1, gp_wlan_qapi_cxt->connect_cmd.ssid, __QAPI_WLAN_MAX_SSID_LEN+1);
+    pg_wifi_demo_cxt.ssid_len = gp_wlan_qapi_cxt->connect_cmd.ssidLength;
+    memscpy(pg_wifi_demo_cxt.passphrase, WMI_PASSPHRASE_LEN+1, gp_wlan_qapi_cxt->passphrase_cmd.passphrase, WMI_PASSPHRASE_LEN+1);
+    pg_wifi_demo_cxt.passphrase_len = gp_wlan_qapi_cxt->passphrase_cmd.passphrase_len;
+    pg_wifi_demo_cxt.authMode = gp_wlan_qapi_cxt->connect_cmd.authMode;
+    pg_wifi_demo_cxt.dot11AuthMode = gp_wlan_qapi_cxt->connect_cmd.dot11AuthMode;
+    pg_wifi_demo_cxt.groupCryptoType = gp_wlan_qapi_cxt->connect_cmd.groupCryptoType;
+    pg_wifi_demo_cxt.pairwiseCryptoType = gp_wlan_qapi_cxt->connect_cmd.pairwiseCryptoType;
+
+    /* Retry every 10 min while disconnected; wlan_shell_event_handler()
+     * starts this on DISCONNECT and stops it once CONNECT succeeds again.
+     * Widened from 5s: a fast retry cadence here was the leading suspect
+     * for periodic current spikes during idle power measurement (its
+     * period matched the observed spike interval almost exactly). Slower
+     * reconnect attempts trade off slower recovery from an AP outage for
+     * much less average power impact if this timer is ever active. */
+    roaming_timer = nt_create_timer(function_reconnect_cb, NULL, NT_MS_TO_TICKS(600000), TRUE);
 
     vTaskDelete(NULL);
 }

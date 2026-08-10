@@ -57,23 +57,28 @@
  * immediately on (re)connect, then on this interval. 10 min matches the
  * keepalive above, so publishes also double as the traffic keeping the
  * session alive - no separate idle PINGREQ needed most cycles. */
+/* Also doubles as the ONLY wake interval for the whole task once
+ * connected/idle - see mqtt_printf_task(). Every call to MQTT_ProcessLoop()
+ * needs the radio to come fully active (not just DTIM10's passive listen
+ * wake) to service the socket, which draws far more current than idle -
+ * confirmed by measurement: even a 10s poll (an earlier, more cautious
+ * choice than strictly necessary) was producing a periodic ~30uA->170uA
+ * spike every single cycle, all day, whether or not there was anything to
+ * do. Neither this nor MQTT_KEEPALIVE_SEC need anywhere near that kind of
+ * precision, so the task now sleeps for this entire interval in one shot -
+ * a single wake per cycle, the minimum possible for this workload. */
 #define MQTT_PUBLISH_INTERVAL_MS    600000U
 
 /* Set to 0 to establish WLAN + MQTT and then stay fully silent in DTIM10
  * sleep (no periodic publish at all) - useful for a clean baseline
  * sleep-current measurement with no traffic whatsoever. Default 1: publish
  * an SHT40 reading on connect and every MQTT_PUBLISH_INTERVAL_MS after.
- * Either way, MQTT_ProcessLoop() still runs to service the connection, and
- * the on-demand "measure" command on sensor/cmd still works. */
+ * Either way, MQTT_ProcessLoop() still runs to service the connection
+ * (keepalive, incoming data), and the on-demand "measure" command on
+ * sensor/cmd still works, though it may take up to a full
+ * MQTT_PUBLISH_INTERVAL_MS to be noticed and acted on - acceptable given
+ * the priority here is minimum wake count/power, not responsiveness. */
 #define MQTT_AUTO_PUBLISH 1
-
-/* How often the task wakes to call MQTT_ProcessLoop(). Kept well under
- * MQTT_PUBLISH_INTERVAL_MS/keepalive but still coarse (10s) on purpose:
- * confirmed by log timestamps that a fast poll here (500ms) forces the
- * board to wake ~2x more often than DTIM10's own ~1024ms cycle, which
- * previously kept the DTIM10 current target out of reach - the polling
- * loop itself, not the radio, was keeping the CPU busy. */
-#define MQTT_PROCESS_INTERVAL_MS 10000U
 
 #define info_printf(msg, ...) printf("MQTT_TEST: " msg, ##__VA_ARGS__)
 
@@ -395,8 +400,6 @@ static int sht40_measure_and_publish(void)
 
 static void mqtt_printf_task(void *arg)
 {
-    TickType_t last_pub;
-
     (void)arg;
 
     sht40_open();
@@ -417,17 +420,10 @@ static void mqtt_printf_task(void *arg)
             continue;
         }
 
-#if MQTT_AUTO_PUBLISH
-        /* Send a reading immediately on (re)connect, before settling into
-         * the periodic interval below. A measurement hiccup (return 1) is
-         * already logged inside the helper and doesn't affect the fresh
-         * connection; only an actual publish failure (-1) is worth an
-         * extra note here. */
-        if (sht40_measure_and_publish() < 0)
-            info_printf("initial publish failed\n");
-#endif /* MQTT_AUTO_PUBLISH */
-
-        last_pub = xTaskGetTickCount();
+        /* No separate "initial publish" here: the inner loop's first pass
+         * (immediately below, before its vTaskDelay) already publishes
+         * right after connecting - having both was the bug that caused
+         * two back-to-back messages at startup. */
         s_publish_now = 0;
 
         for (;;) {
@@ -446,30 +442,43 @@ static void mqtt_printf_task(void *arg)
             }
 
 #if MQTT_AUTO_PUBLISH
+            /* No elapsed-time bookkeeping needed: every wake here already
+             * IS the scheduled publish point, since the vTaskDelay below
+             * sleeps for exactly one full MQTT_PUBLISH_INTERVAL_MS - this
+             * is the ONLY wake in the whole cycle, done deliberately to
+             * minimize how often the radio has to come active. An
+             * on-demand "measure" command that arrived on sensor/cmd
+             * during the sleep (buffered by the socket, picked up by
+             * MQTT_ProcessLoop() just above) folds into this same cycle
+             * rather than causing an early wake - fine given the
+             * priority here is minimum wake count, not responsiveness. */
             {
-                TickType_t now = xTaskGetTickCount();
-                uint32_t elapsed = (uint32_t)((now - last_pub) * portTICK_PERIOD_MS);
-                if (elapsed >= MQTT_PUBLISH_INTERVAL_MS)
-                    s_publish_now = 1;
-            }
-#endif /* MQTT_AUTO_PUBLISH */
+                int result = sht40_measure_and_publish();
 
-            if (s_publish_now) {
-                /* Only an actual publish failure (-1) is a connection
-                 * problem worth reconnecting over. A measurement-only
-                 * failure (1) is already logged inside the helper; leave
-                 * the MQTT session alone and just try again next cycle. */
-                if (sht40_measure_and_publish() < 0) {
+                if (result < 0) {
                     info_printf("publish failed, reconnecting\n");
                     Plaintext_Disconnect(&s_net_ctx);
                     s_publish_now = 0;
                     break;
                 }
-                last_pub = xTaskGetTickCount();
-                s_publish_now = 0;
+                /* result == 1 (measurement-only hiccup, already logged
+                 * inside the helper): MQTT_ProcessLoop() above already
+                 * confirmed the session is fine. There's no faster retry
+                 * anymore - a bad reading now costs a full
+                 * MQTT_PUBLISH_INTERVAL_MS (10 min) wait before the next
+                 * attempt, traded deliberately for the lower wake
+                 * frequency. */
             }
+#endif /* MQTT_AUTO_PUBLISH */
+            s_publish_now = 0;
 
-            vTaskDelay(pdMS_TO_TICKS(MQTT_PROCESS_INTERVAL_MS));
+            /* Single wake per cycle - the minimum possible for this
+             * workload. MQTT_PUBLISH_INTERVAL_MS doubles as the
+             * MQTT_ProcessLoop() servicing cadence too (keepalive
+             * PINGREQ, if the publish above didn't already reset it) -
+             * no reason to wake more often than the publish schedule
+             * itself requires. */
+            vTaskDelay(pdMS_TO_TICKS(MQTT_PUBLISH_INTERVAL_MS));
         }
 
         /* Brief pause before reconnect, same as the SHT40 publisher. */

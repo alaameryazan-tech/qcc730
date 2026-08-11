@@ -228,8 +228,12 @@ extern uint8_t g_wifi_ready;
  * that repeated re-fire is allowed to cost a real I2C wake, without
  * delaying a genuine, isolated transition at all (it only ever throttles
  * a BURST of same-cause events, not the first one in a while - see
- * contact_sensor_task()'s NOTIFY_GPIO_BIT handling and s_gpio_catchup_timer). */
-#define CONTACT_SENSOR_MIN_INTERRUPT_GAP_MS 3000U
+ * contact_sensor_task()'s NOTIFY_GPIO_BIT handling and s_gpio_catchup_timer).
+ * 30s trades a slower self-correction if something ever got stuck
+ * mid-state for far fewer of these confirmation wake-ups while
+ * genuinely resting in one state (e.g. saturated/CLOSED) - tune down for
+ * faster worst-case recovery, up for even fewer wake-ups. */
+#define CONTACT_SENSOR_MIN_INTERRUPT_GAP_MS 30000U
 
 #define info_printf(msg, ...) printf("CONTACT_SENSOR: " msg, ##__VA_ARGS__)
 

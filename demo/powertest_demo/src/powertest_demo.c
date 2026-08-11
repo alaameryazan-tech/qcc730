@@ -71,6 +71,15 @@ extern uint32_t UART_Send_direct(char *txbuf, uint32_t buflen);
 #define POWERTEST_WIFI_SSID       "FRITZ!Box7590AX"
 #define POWERTEST_WIFI_PASSPHRASE "Tech91847"
 
+/* Set to 0 to keep WiFi power-save fully OFF (wifi_disable_power_save(),
+ * called from powertest_wifi_auto_connect_task(), takes care of that) -
+ * this is the current build's purpose: contact-sensor readings must never
+ * be delayed by DTIM/BMPS sleep. Set back to 1 to restore this demo's
+ * original behavior of engaging BMPS/DTIM10 sleep POWERTEST_BMPS_ENTER_DELAY_MS
+ * after connecting (see powertest_pm_enable_task() below), e.g. to go back
+ * to measuring sleep-mode current draw. */
+#define ENABLE_DTIM_BMPS_TASK 0
+
 /* Delay before engaging BMPS/DTIM10 sleep, so WLAN + the MQTT test
  * publisher's first connect/publish have a full-power window to finish
  * establishing before the radio starts duty-cycling on the DTIM10
@@ -203,12 +212,18 @@ extern lpr_wmi_t g_lowpower_wmi;
 extern wlan_qapi_cxt_t *gp_wlan_qapi_cxt;
 
 extern qapi_Status_t qapi_pm_enable(uint8_t enable);
+extern qapi_Status_t qapi_bmps_cfg(uint8_t enable, uint32_t idle_timeout);
+extern qapi_Status_t qapi_imps_disable_sleep(void);
 extern qapi_Status_t wmi_cmd_send(WMI_COMMAND_ID cmd_id, void *p_data, uint32_t data_len);
 /* Starts the periodic MQTT test-message publisher (mqtt_printf_task.c);
  * used to verify MQTT connectivity/timing under DTIM10 sleep without the
  * SHT40 sensor. See mqtt_printf_task_start() call in the CONNECT handler
  * below. */
 extern void mqtt_printf_task_start(void);
+/* Starts the continuous VCNL3020 contact-sensor logger (contact_sensor_task.c).
+ * Independent of WLAN state - started unconditionally from
+ * Initialize_powertest_Demo() below, not from the CONNECT handler. */
+extern void contact_sensor_task_start(void);
 /* Starts the DHCPv4 client on the STA netif (net_shell.c) - equivalent to
  * running "dhcpv4c wlan1 new" on the console. Without this the STA netif
  * stays on its unconfigured 127.0.0.1 default and every outbound
@@ -223,9 +238,11 @@ extern void qurt_thread_sleep(uint32 duration);
 
 void pm_enable(void);
 uint8_t function_reconnect_cb(void);
+#if ENABLE_DTIM_BMPS_TASK
 static TaskHandle_t pm_enable_task_handle;
 static uint8_t s_pm_enable_task_started;
 static void powertest_pm_enable_task(void *arg);
+#endif /* ENABLE_DTIM_BMPS_TASK */
 #if ENABLE_IMPS_DEEPSLEEP
 static TaskHandle_t imps_deepsleep_task_handle;
 static void powertest_imps_deepsleep_task(void *arg);
@@ -570,6 +587,13 @@ static void wlan_shell_event_handler(__unused uint8_t deviceId, uint32_t cbId, v
                 }
             }
 #endif /* ENABLE_SHT40_MQTT */
+#if ENABLE_DTIM_BMPS_TASK
+            /* Set ENABLE_DTIM_BMPS_TASK to 1 (top of file) to restore this
+             * demo's original behavior: pm_enable() fires
+             * POWERTEST_BMPS_ENTER_DELAY_MS after connecting and re-engages
+             * BMPS/DTIM10 sleep. Left at 0 here so power-save stays fully
+             * OFF, per wifi_disable_power_save() in
+             * powertest_wifi_auto_connect_task() below. */
             if (!s_pm_enable_task_started) {
                 if (nt_qurt_thread_create(powertest_pm_enable_task, "powertest_pm_enable",
                         STA_TASK_STACK_SIZE, NULL, 5, &pm_enable_task_handle) == pdPASS) {
@@ -578,6 +602,7 @@ static void wlan_shell_event_handler(__unused uint8_t deviceId, uint32_t cbId, v
                     info_printf("powertest_pm_enable create fail\n");
                 }
             }
+#endif /* ENABLE_DTIM_BMPS_TASK */
 #if ENABLE_IMPS_DEEPSLEEP
             if (!s_imps_started) {
                 if (nt_qurt_thread_create(powertest_imps_deepsleep_task, "powertest_imps_sleep",
@@ -636,6 +661,29 @@ static void wlan_shell_event_handler(__unused uint8_t deviceId, uint32_t cbId, v
     }
 }
 
+/* Fully disable WiFi power-save / DTIM-interval sleep, so the STA radio
+ * stays fully active and never delays or misses traffic waiting for its
+ * next DTIM wake window. This is the opposite of pm_enable() below (which
+ * this demo's BMPS/DTIM10 sleep test normally calls once connected) - call
+ * this INSTEAD of pm_enable(), not in addition to it. */
+static void wifi_disable_power_save(void)
+{
+    /* Turns off the system power-management engine outright - this is the
+     * single call that gates whether the radio is ever allowed to enter
+     * any low-power/duty-cycled state at all. */
+    qapi_pm_enable(0);
+
+    /* Explicitly disable BMPS (Beacon Miss/Modem Power Save) too, in case
+     * firmware would otherwise engage it independently of qapi_pm_enable().
+     * idle_timeout is unused when enable=0. */
+    qapi_bmps_cfg(0, 0);
+
+    /* Make sure IMPS (deep sleep) is off as well. */
+    qapi_imps_disable_sleep();
+
+    info_printf("WiFi power-save fully disabled (PM/BMPS/IMPS off)\n");
+}
+
 void pm_enable()
 {
     if (s_pm_enabled) {
@@ -659,6 +707,7 @@ void pm_enable()
     s_pm_enabled = 1;
 }
 
+#if ENABLE_DTIM_BMPS_TASK
 static void powertest_pm_enable_task(void *arg)
 {
     (void)arg;
@@ -671,6 +720,7 @@ static void powertest_pm_enable_task(void *arg)
 
     vTaskDelete(NULL);
 }
+#endif /* ENABLE_DTIM_BMPS_TASK */
 
 #if ENABLE_IMPS_DEEPSLEEP
 static void powertest_imps_deepsleep_task(void *arg)
@@ -725,21 +775,26 @@ static void powertest_wifi_auto_connect_task(void *arg)
         __QAPI_WLAN_PARAM_GROUP_WIRELESS_SSID,
         (void *)ssid, strlen(ssid), FALSE);
 
-    /* Request DTIM 10 listen interval for lowest sleep-mode current draw.
-     * time = 1000 TU = 10 x 100 TU (default AP beacon interval), so the
-     * device wakes every 10th beacon/DTIM instead of every beacon.
-     * Trade-off: buffered-data response latency rises to ~10 beacon
-     * intervals (~1s), but sleep current drops (~45uA @ DTIM5 -> ~39uA
-     * target @ DTIM10 per datasheet). Must be set before qapi_WLAN_Commit()
-     * so it applies to this association attempt; firmware snaps to the
-     * closest DTIM the AP actually advertises.
-     */
+    /* Listen interval = 1x beacon interval (100 TU): wake at EVERY
+     * beacon/DTIM instead of skipping N-1 of them, so buffered traffic is
+     * never delayed waiting for a DTIM window. This is the opposite of
+     * the DTIM10 (1000 TU) setting this demo normally uses to minimize
+     * sleep current - here the goal is minimum latency, not minimum
+     * power. Must be set before qapi_WLAN_Commit() so it applies to this
+     * association attempt. */
     qapi_WLAN_Listen_Interval_Params_t listen_interval;
-    listen_interval.time = 1000;
+    listen_interval.time = 100;
     listen_interval.round_type = 0;
     qapi_WLAN_Set_Param(DEV_STA_ID, __QAPI_WLAN_PARAM_GROUP_WIRELESS,
         __QAPI_WLAN_PARAM_GROUP_WIRELESS_STA_LISTEN_INTERVAL_IN_TU,
         &listen_interval, sizeof(listen_interval), FALSE);
+
+    /* Disable modem sleep / BMPS / IMPS before associating, so the radio
+     * never duty-cycles once connected. Note this deliberately does NOT
+     * start powertest_pm_enable_task (see the CONNECT handler below) -
+     * that task calls pm_enable() after a delay, which would re-enable
+     * BMPS and undo this. */
+    wifi_disable_power_save();
 
     info_printf("auto-connecting to ssid %s\n", ssid);
     qapi_WLAN_Commit(DEV_STA_ID);
@@ -1002,4 +1057,8 @@ void Initialize_powertest_Demo(void)
             STA_TASK_STACK_SIZE, NULL, 5, &wifi_auto_connect_task_handle) != pdPASS) {
         info_printf("powertest_wifi_connect create fail\n");
     }
+
+    /* Reading the I2C contact sensor doesn't need WLAN at all, so start it
+     * unconditionally here instead of from the CONNECT event handler. */
+    contact_sensor_task_start();
 }

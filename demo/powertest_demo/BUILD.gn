@@ -30,6 +30,8 @@ powertest_demo_src = [
 
     "src/mqtt_printf_task.c",
 
+    "src/contact_sensor_task.c",
+
 ]
 
 

@@ -4,26 +4,64 @@
  */
 
 /* Vishay VCNL3020 IR proximity sensor, used as a "contact" (open/closed)
- * sensor over I2C, printed continuously to the console.
+ * sensor over I2C, published to MQTT and logged to the console on every
+ * OPEN<->CLOSED transition - NOT on every poll. The sensor is still
+ * sampled every CONTACT_SENSOR_READ_INTERVAL_MS internally (needed for the
+ * median filter/hysteresis to work), it just stays quiet as long as the
+ * status doesn't change.
  *
  * I2C read/write pattern (open, close-before-reopen, two separate
  * START+STOP transfers for a register read) is copied from the working
  * SHT40 driver in mqtt_printf_task.c in this same demo - that pattern is
  * already confirmed to work with the QAPI I2C driver/instance used here.
+ * The MQTT connect/publish/reconnect logic below is the same trimmed down
+ * to publish-only (no subscribe) - same broker/credentials as that task.
  *
- * Independent of WLAN: reading the sensor does not need the radio at all,
- * so this task is started unconditionally from Initialize_powertest_Demo()
- * in powertest_demo.c, not gated on g_wifi_ready like the MQTT task is.
- */
+ * The I2C side is independent of WLAN and keeps sampling/printing/tracking
+ * status changes even with no WiFi at all; only the MQTT publish is gated
+ * on g_wifi_ready. Started unconditionally from Initialize_powertest_Demo()
+ * in powertest_demo.c. */
 
 #include <stdint.h>
 #include <stdio.h>
+#include <string.h>
 
 #include "FreeRTOS.h"
 #include "task.h"
 
 #include "qapi_i2c.h"
 #include "nt_timer.h"
+#include "core_mqtt.h"
+#include "plaintext_posix.h"
+
+/* Set by powertest_demo.c once the WLAN CONNECT event / 4-way handshake
+ * completes; also used to unwind the MQTT connection on disconnect. */
+extern uint8_t g_wifi_ready;
+
+/* Same broker/credentials as mqtt_printf_task.c's SHT40 publisher - a
+ * different MQTT_CLIENT_ID so the two can hold separate broker sessions if
+ * both happen to be running at once. */
+#define MQTT_BROKER               "139.162.181.126"
+#define MQTT_PORT                 1883
+#define MQTT_CLIENT_ID            "contact_sensor_qcc7030"
+#define MQTT_USERNAME             "AABBCCDD"
+#define MQTT_PASSWORD             "KXL8DHPsXggvRELD"
+/* Payload is just "OPEN" or "CLOSED", published retained so an MQTTX
+ * client that (re)subscribes later immediately sees the current status
+ * instead of waiting for the next transition. */
+#define MQTT_TOPIC_PUB            "sensor/contact"
+/* Retained "connected"/non-retained LWT "disconnected", same pattern as
+ * mqtt_printf_task.c's status topic. */
+#define MQTT_TOPIC_STATUS         "sensor/contact/status"
+#define MQTT_LWT_MESSAGE          "qcc disconnected"
+#define MQTT_ONLINE_MESSAGE       "qcc connected"
+#define MQTT_NETWORK_BUF_SIZE     512U
+#define MQTT_KEEPALIVE_SEC        60U
+#define MQTT_CONNACK_TIMEOUT_MS   5000U
+#define MQTT_TRANSPORT_TIMEOUT_MS 1000U
+/* Minimum gap between MQTT (re)connect attempts, so a broker/network
+ * outage doesn't get hammered with an attempt every single 500ms I2C poll. */
+#define MQTT_RECONNECT_INTERVAL_MS 5000U
 
 /* ------------------------------------------------------------------ */
 /*  VCNL3020 register map                                              */
@@ -85,6 +123,172 @@ static uint8_t     s_sensor_ready;
 static uint8_t     s_contact_closed; /* last reported status, for hysteresis */
 static TaskHandle_t s_task_handle;
 static volatile uint8_t s_started;
+
+/* ------------------------------------------------------------------ */
+/*  MQTT (publish-only)                                                */
+/* ------------------------------------------------------------------ */
+
+static PlaintextParams_t s_net_params;
+static NetworkContext_t  s_net_ctx;
+static MQTTContext_t     s_mqtt_ctx;
+static uint8_t           s_mqtt_buf[MQTT_NETWORK_BUF_SIZE];
+static uint8_t           s_mqtt_connected;
+static uint8_t           s_mqtt_needs_publish; /* current status not yet sent on this connection */
+static uint32_t          s_mqtt_next_attempt_ms;
+
+static uint32_t mqtt_get_time_ms(void)
+{
+    return hres_timer_curr_time_ms();
+}
+
+/* No subscriptions on this client, so nothing to do with incoming
+ * packets - MQTT_Init() still requires a valid callback pointer. */
+static void mqtt_event_cb(MQTTContext_t *ctx, MQTTPacketInfo_t *pkt, MQTTDeserializedInfo_t *info)
+{
+    (void)ctx;
+    (void)pkt;
+    (void)info;
+}
+
+static int mqtt_connect(void)
+{
+    TransportInterface_t transport;
+    MQTTFixedBuffer_t netbuf;
+    MQTTConnectInfo_t conninfo;
+    MQTTPublishInfo_t willInfo;
+    MQTTPublishInfo_t onlineInfo;
+    ServerInfo_t server;
+    bool session_present;
+
+    s_net_params.socketDescriptor = -1;
+    s_net_ctx.pParams = &s_net_params;
+
+    server.pHostName = MQTT_BROKER;
+    server.hostNameLength = sizeof(MQTT_BROKER) - 1;
+    server.port = MQTT_PORT;
+
+    if (Plaintext_Connect(&s_net_ctx, &server, MQTT_TRANSPORT_TIMEOUT_MS, MQTT_TRANSPORT_TIMEOUT_MS) != SOCKETS_SUCCESS)
+        return -1;
+
+    transport.pNetworkContext = &s_net_ctx;
+    transport.send = Plaintext_Send;
+    transport.recv = Plaintext_Recv;
+    transport.writev = NULL;
+
+    netbuf.pBuffer = s_mqtt_buf;
+    netbuf.size = sizeof(s_mqtt_buf);
+
+    if (MQTT_Init(&s_mqtt_ctx, &transport, mqtt_get_time_ms, mqtt_event_cb, &netbuf) != MQTTSuccess) {
+        Plaintext_Disconnect(&s_net_ctx);
+        return -1;
+    }
+
+    memset(&conninfo, 0, sizeof(conninfo));
+    conninfo.cleanSession = true;
+    conninfo.keepAliveSeconds = MQTT_KEEPALIVE_SEC;
+    conninfo.pClientIdentifier = MQTT_CLIENT_ID;
+    conninfo.clientIdentifierLength = sizeof(MQTT_CLIENT_ID) - 1;
+    conninfo.pUserName = MQTT_USERNAME;
+    conninfo.userNameLength = sizeof(MQTT_USERNAME) - 1;
+    conninfo.pPassword = MQTT_PASSWORD;
+    conninfo.passwordLength = sizeof(MQTT_PASSWORD) - 1;
+
+    memset(&willInfo, 0, sizeof(willInfo));
+    willInfo.qos = MQTTQoS0;
+    willInfo.retain = false;
+    willInfo.pTopicName = MQTT_TOPIC_STATUS;
+    willInfo.topicNameLength = sizeof(MQTT_TOPIC_STATUS) - 1;
+    willInfo.pPayload = MQTT_LWT_MESSAGE;
+    willInfo.payloadLength = sizeof(MQTT_LWT_MESSAGE) - 1;
+
+    if (MQTT_Connect(&s_mqtt_ctx, &conninfo, &willInfo, MQTT_CONNACK_TIMEOUT_MS, &session_present) != MQTTSuccess) {
+        Plaintext_Disconnect(&s_net_ctx);
+        return -1;
+    }
+
+    memset(&onlineInfo, 0, sizeof(onlineInfo));
+    onlineInfo.qos = MQTTQoS0;
+    onlineInfo.retain = true;
+    onlineInfo.pTopicName = MQTT_TOPIC_STATUS;
+    onlineInfo.topicNameLength = sizeof(MQTT_TOPIC_STATUS) - 1;
+    onlineInfo.pPayload = MQTT_ONLINE_MESSAGE;
+    onlineInfo.payloadLength = sizeof(MQTT_ONLINE_MESSAGE) - 1;
+    MQTT_Publish(&s_mqtt_ctx, &onlineInfo, 0);
+
+    info_printf("MQTT connected to %s:%d, publishing to %s\n", MQTT_BROKER, MQTT_PORT, MQTT_TOPIC_PUB);
+    return 0;
+}
+
+static void mqtt_teardown(void)
+{
+    Plaintext_Disconnect(&s_net_ctx);
+    s_mqtt_connected = 0;
+    /* Force a fresh publish of the current status once reconnected, since
+     * a brand new connection has no idea what we last sent. */
+    s_mqtt_needs_publish = 1;
+}
+
+static int mqtt_publish_status(uint8_t closed)
+{
+    MQTTPublishInfo_t pub;
+    const char *payload = closed ? "CLOSED" : "OPEN";
+
+    memset(&pub, 0, sizeof(pub));
+    pub.qos = MQTTQoS0;
+    pub.retain = true; /* late subscribers immediately see current status */
+    pub.dup = false;
+    pub.pTopicName = MQTT_TOPIC_PUB;
+    pub.topicNameLength = sizeof(MQTT_TOPIC_PUB) - 1;
+    pub.pPayload = payload;
+    pub.payloadLength = strlen(payload);
+
+    return (MQTT_Publish(&s_mqtt_ctx, &pub, 0) == MQTTSuccess) ? 0 : -1;
+}
+
+/* Called once per task loop iteration: services the existing connection,
+ * (re)connects if needed (rate-limited to MQTT_RECONNECT_INTERVAL_MS), and
+ * flushes a pending status publish. Never blocks the I2C polling cadence
+ * for more than one MQTT_TRANSPORT_TIMEOUT_MS. */
+static void mqtt_service(uint32_t now_ms)
+{
+    if (!g_wifi_ready) {
+        if (s_mqtt_connected)
+            mqtt_teardown();
+        return;
+    }
+
+    if (!s_mqtt_connected) {
+        if (now_ms < s_mqtt_next_attempt_ms)
+            return;
+        if (mqtt_connect() == 0) {
+            s_mqtt_connected = 1;
+            s_mqtt_needs_publish = 1; /* push current status right away */
+        } else {
+            s_mqtt_next_attempt_ms = now_ms + MQTT_RECONNECT_INTERVAL_MS;
+        }
+        return;
+    }
+
+    {
+        MQTTStatus_t st = MQTT_ProcessLoop(&s_mqtt_ctx);
+        if (st != MQTTSuccess && st != MQTTNeedMoreBytes) {
+            info_printf("MQTT session lost (%d), reconnecting\n", (int)st);
+            mqtt_teardown();
+            s_mqtt_next_attempt_ms = now_ms + MQTT_RECONNECT_INTERVAL_MS;
+            return;
+        }
+    }
+
+    if (s_mqtt_needs_publish) {
+        if (mqtt_publish_status(s_contact_closed) == 0) {
+            s_mqtt_needs_publish = 0;
+        } else {
+            info_printf("MQTT publish failed, reconnecting\n");
+            mqtt_teardown();
+            s_mqtt_next_attempt_ms = now_ms + MQTT_RECONNECT_INTERVAL_MS;
+        }
+    }
+}
 
 /* ------------------------------------------------------------------ */
 /*  I2C register access                                                */
@@ -240,6 +444,10 @@ static void contact_sensor_task(void *arg)
 {
     uint16_t hist[3] = { 0, 0, 0 };
     uint8_t hist_count = 0;
+    /* Sentinel (neither 0 nor 1) so the very first classification always
+     * prints once at boot, establishing a known starting line in the log -
+     * after that, only actual OPEN<->CLOSED transitions print. */
+    uint8_t last_printed_closed = 0xFF;
 
     (void)arg;
 
@@ -257,8 +465,11 @@ static void contact_sensor_task(void *arg)
          * is actually available here. */
         uint32_t now_ms = hres_timer_curr_time_ms();
 
+        mqtt_service(now_ms);
+
         if (vcnl3020_read_proximity(&proximity) == 0) {
             uint16_t median;
+            const char *status;
 
             hist[0] = hist[1];
             hist[1] = hist[2];
@@ -268,10 +479,15 @@ static void contact_sensor_task(void *arg)
             /* Pad with the newest sample until 3 real readings are in -
              * median of (x, x, new) still favors the new one on boot. */
             median = contact_median3(hist_count < 3 ? proximity : hist[0], hist[1], hist[2]);
+            status = contact_classify(median); /* updates s_contact_closed */
 
-            info_printf("[%lu.%03lus] proximity=%u median=%u status=%s\n",
-                (unsigned long)(now_ms / 1000), (unsigned long)(now_ms % 1000),
-                (unsigned)proximity, (unsigned)median, contact_classify(median));
+            if (s_contact_closed != last_printed_closed) {
+                info_printf("[%lu.%03lus] status changed: %s (raw=%u median=%u)\n",
+                    (unsigned long)(now_ms / 1000), (unsigned long)(now_ms % 1000),
+                    status, (unsigned)proximity, (unsigned)median);
+                last_printed_closed = s_contact_closed;
+                s_mqtt_needs_publish = 1; /* mqtt_service() sends it once connected */
+            }
         } else {
             info_printf("[%lu.%03lus] read failed, re-opening I2C\n",
                 (unsigned long)(now_ms / 1000), (unsigned long)(now_ms % 1000));

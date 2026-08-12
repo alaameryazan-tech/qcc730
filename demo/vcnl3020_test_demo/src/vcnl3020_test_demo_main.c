@@ -5,9 +5,10 @@
 
 /* Standalone VCNL3020 bring-up test - entry point.
  *
- * See vcnl3020_test.c for the actual sensor logic (pure I2C polling, no
- * /INT/GPIO wiring at all - see that file's top comment for why). This
- * file only wires app_init()/app_main() per this SDK's demo entry-point
+ * See vcnl3020_test.c for the actual sensor logic (interrupt-driven on
+ * GPIO3 - see that file's top comment for the wiring and how to read the
+ * STATUS lines). This file only wires app_init()/app_main() per this SDK's
+ * demo entry-point
  * convention (build/freertos/common/application_code/main.c's
  * qccsdk_start_app_task(): app_init() runs first, then a dedicated
  * "qmain" task calls app_main() and is deleted when it returns - no

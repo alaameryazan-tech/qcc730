@@ -12,13 +12,13 @@
     "qualIoe.staticCfg.demoBuildScriptLinux": "qccsdk.py",
     "qualIoe.staticCfg.demoFlashScriptWin": "qccsdk.py",
     "qualIoe.staticCfg.demoFlashScriptLinux": "qccsdk.py",
-    "qualIoe.staticCfg.defaultDemo": "FERMION_POWER_TEST_DEMO",
-    "qualIoe.staticCfg.defaultDemoPathName": "powertest_demo",
+    "qualIoe.staticCfg.defaultDemo": "FERMION_VCNL3020_TEST_DEMO",
+    "qualIoe.staticCfg.defaultDemoPathName": "vcnl3020_test_demo",
     "qualIoe.staticCfg.buildRunPath": "./",
     "qualIoe.staticCfg.entryFun": "app_main",
-    "qualIoe.staticCfg.elfName": "FERMION_POWER_TEST_DEMO.elf",
+    "qualIoe.staticCfg.elfName": "FERMION_VCNL3020_TEST_DEMO.elf",
     "qualIoe.staticCfg.elfPath": "./output/${demoChipBoard}/${defaultDemo}/DEBUG/bin/${elfName}",
     "qualIoe.staticCfg.gdbInitFilePath": "./tools/jtag/openocd/ch347/gdb_for_qccide.gdbinit",
     "qualIoe.staticCfg.openocdGdbServerFilePath": "./tools/jtag/openocd/ch347/qcc730.cfg",
-    "qualIoe.commonCfg.consolePortWin": "COM11"
+    "qualIoe.commonCfg.consolePortWin": "COM15"
 }

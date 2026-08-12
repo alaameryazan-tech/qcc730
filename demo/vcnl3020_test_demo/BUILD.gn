@@ -1,0 +1,27 @@
+# Copyright (c) 2026 Qualcomm Innovation Center, Inc. All rights reserved.
+#SPDX-License-Identifier: BSD-3-Clause-Clear
+#
+import("//configs_decl.gni")
+
+vcnl3020_test_demo_inc = [
+    "src",
+]
+
+vcnl3020_test_demo_src = [
+    "src/vcnl3020_test_demo_main.c",
+    "src/vcnl3020_test.c",
+]
+
+not_needed("*", [ ])
+
+config("_config") {
+    if (image_name == "FERMION_VCNL3020_TEST_DEMO") {
+        include_dirs = vcnl3020_test_demo_inc
+    }
+}
+
+source_set("vcnl3020_test_demo") {
+    if (image_name == "FERMION_VCNL3020_TEST_DEMO") {
+        sources = vcnl3020_test_demo_src
+    }
+}

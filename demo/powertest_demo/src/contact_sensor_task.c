@@ -3,6 +3,20 @@
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
+/* DISABLED on 2026-08-12 - VCNL3020 removed - sensor no longer used in this
+ * file, replaced by on-demand polling in mqtt_printf_task.c's
+ * vcnl3020_poll_task(). This file's contact_sensor_task_start() is no
+ * longer called (see the commented-out call site in
+ * Initialize_powertest_Demo(), powertest_demo.c) - this whole task never
+ * runs anymore. The code below is left intact, not deleted, for
+ * reference/rollback, but do NOT re-enable it while mqtt_printf_task.c's
+ * VCNL3020 poller is also active - both address the same physical VCNL3020
+ * (fixed I2C address 0x13, no address pin) and would fight over its
+ * command register (this file wants continuous self-timed + hardware
+ * threshold-interrupt mode; mqtt_printf_task.c wants pure on-demand mode)
+ * and over the shared I2C instance, with no mutex coordinating the two
+ * tasks. */
+
 /* Vishay VCNL3020 IR proximity sensor, used as a "contact" (open/closed)
  * sensor over I2C - INTERRUPT-DRIVEN. This replaces an earlier 500ms-poll
  * version of this file (measured ~301uA average, dominated by the CPU
@@ -229,11 +243,11 @@ extern uint8_t g_wifi_ready;
  * delaying a genuine, isolated transition at all (it only ever throttles
  * a BURST of same-cause events, not the first one in a while - see
  * contact_sensor_task()'s NOTIFY_GPIO_BIT handling and s_gpio_catchup_timer).
- * 30s trades a slower self-correction if something ever got stuck
- * mid-state for far fewer of these confirmation wake-ups while
- * genuinely resting in one state (e.g. saturated/CLOSED) - tune down for
- * faster worst-case recovery, up for even fewer wake-ups. */
-#define CONTACT_SENSOR_MIN_INTERRUPT_GAP_MS 30000U
+ * 3s trades more of these confirmation wake-ups while genuinely resting
+ * in one state (e.g. saturated/CLOSED) for much faster self-correction if
+ * something ever got stuck mid-state - tune up for fewer wake-ups, down
+ * for even faster worst-case recovery. */
+#define CONTACT_SENSOR_MIN_INTERRUPT_GAP_MS 3000U
 
 #define info_printf(msg, ...) printf("CONTACT_SENSOR: " msg, ##__VA_ARGS__)
 

@@ -3,15 +3,60 @@
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
-/* SHT40 + MQTT publisher for powertest_demo.
+/* VCNL3020 + MQTT publisher for powertest_demo.
+ *
+ * SHT40 removed - sensor no longer used, replaced by VCNL3020 - commented
+ * out on 2026-08-12 (search this file for that marker to find every
+ * removed block; none of it was deleted, just #if 0'd out).
  *
  * Reuses the exact same MQTT setup (broker, topic, QoS, reconnect handling)
- * as the qcli_demo SHT40 publisher (sht40_task.c) and the SHT40 I2C read
- * sequence from that same file, but wired into the DTIM10 power-test flow:
- * publishes one reading immediately after connecting, then goes idle in
- * DTIM10 sleep and publishes again every MQTT_PUBLISH_INTERVAL_MS (10 min
- * by default) so current draw can be measured under DTIM10 with only
- * infrequent, predictable wake bursts for real sensor data.
+ * this file already had for SHT40 - untouched, per the request not to
+ * touch working WLAN/MQTT/DTIM10 handling.
+ *
+ * Sensor reads switched 2026-08-12 from on-demand polling
+ * (vcnl3020_poll_task(), a dedicated task calling vcnl3020_read_proximity()
+ * every VCNL3020_POLL_INTERVAL_MS = 2.5s) to interrupt-driven self-timed
+ * measurement (see vcnl3020.c/.h). The poll task's 2.5s wake, though I2C-
+ * only, turned out to inherently cap BMPS/DTIM10 radio sleep on this SoC -
+ * confirmed via serial log showing a "wakebmps" radio wake on that same
+ * 2.5s cadence, raising average current from ~30-40uA to ~96uA even though
+ * the poll itself never touched the radio directly.
+ *
+ * The first interrupt-driven attempt then had its OWN storm problem
+ * (~95ms wakebmps cadence) - root-caused by building an isolated
+ * standalone test (demo/vcnl3020_test_demo, no WLAN/MQTT/DTIM) with the
+ * same sensor/wiring, which came up completely clean. Turned out to be
+ * self-inflicted by vcnl3020.c's old per-I2C-access "close+reopen"
+ * workaround, not real touch events or board wiring - see vcnl3020.c's
+ * top-of-file comment for the full writeup. Even after fixing that, a
+ * SMALLER residual dose of the same problem remained: this file's own
+ * periodic MQTT_PUBLISH_INTERVAL_MS tick used to also read+publish the
+ * proximity value every 10 min (vcnl3020_measure_and_publish(), now
+ * removed - see its comment), and that read's own I2C transactions were
+ * still enough to induce a handful of false GPIO3 edges right at each
+ * tick boundary (confirmed on hardware: log timestamps landed exactly on
+ * MQTT_PUBLISH_INTERVAL_MS multiples). Fixed by matching the standalone
+ * demo exactly: ZERO periodic sensor reads of any kind. There is no
+ * dedicated sensor task and no periodic sensor I2C access at all:
+ *   - vcnl3020_init() (self-timed + threshold-interrupt config, see
+ *     vcnl3020.h) is called once, from THIS task, right at the top of
+ *     mqtt_printf_task() - the VCNL3020 then free-runs its own
+ *     measurements and does its own threshold comparison in hardware.
+ *   - The existing MQTT_PUBLISH_INTERVAL_MS wait (10 min, unchanged - see
+ *     that macro) now doubles as a wait for VCNL3020_NOTIFY_BIT too: a
+ *     real threshold-crossing interrupt wakes this task immediately for
+ *     a proximity publish, WITHOUT shortening or resetting the normal
+ *     MQTT_PUBLISH_INTERVAL_MS schedule - no new periodic wake source is
+ *     introduced, this is the SAME wait that was already here. When that
+ *     wait times out on schedule instead, only MQTT_ProcessLoop()
+ *     (keepalive) runs - the sensor is not touched on that path anymore.
+ *   - This file remains the sole owner of the VCNL3020 (fixed I2C address
+ *     0x13) - contact_sensor_task.c's own, separate interrupt-driven use
+ *     of the same physical sensor stays retired (see its top-of-file
+ *     comment and the disabled contact_sensor_task_start() call in
+ *     powertest_demo.c); do not re-enable that file while this one is
+ *     active, the two would race on the same I2C instance and command
+ *     register.
  *
  * Started from powertest_demo.c once WLAN connects (see
  * mqtt_printf_task_start()); does not touch WLAN/listen-interval setup.
@@ -20,6 +65,7 @@
 #include <string.h>
 #include <stdint.h>
 #include <stdio.h>
+#include <limits.h> /* ULONG_MAX, for the xTaskNotifyWait() clear-mask below */
 
 #include "FreeRTOS.h"
 #include "task.h"
@@ -29,14 +75,25 @@
 #include "plaintext_posix.h"
 #include "nt_timer.h"
 
-/* Same broker/topic/QoS/reconnect handling as the SHT40 MQTT publisher. */
+#include "vcnl3020.h"
+
+/* Same broker/QoS/reconnect handling as the old SHT40 MQTT publisher -
+ * untouched. Only the client ID and publish topic changed, since those
+ * identify which sensor's data this is - not connection mechanics. */
 #define MQTT_BROKER                 "139.162.181.126"
 #define MQTT_PORT                   1883
-#define MQTT_CLIENT_ID              "sht40_qcc7030"
 #define MQTT_USERNAME               "AABBCCDD"
 #define MQTT_PASSWORD               "KXL8DHPsXggvRELD"
-#define MQTT_TOPIC_PUB              "sensor/sht40"
 #define MQTT_TOPIC_CMD              "sensor/cmd"
+
+/* SHT40 removed - sensor no longer used, replaced by VCNL3020 - commented
+ * out on 2026-08-12 */
+#if 0
+#define MQTT_CLIENT_ID              "sht40_qcc7030"
+#define MQTT_TOPIC_PUB              "sensor/sht40"
+#endif /* SHT40 removed - replaced by VCNL3020 */
+#define MQTT_CLIENT_ID              "vcnl3020_qcc7030"
+#define MQTT_TOPIC_PUB              "sensor/proximity"
 /* Status/availability topic: retained "connected" published right after
  * we connect, non-retained Last Will published by the BROKER (not us) if
  * we ever drop off ungracefully (power loss, out of range, keepalive
@@ -53,32 +110,42 @@
 #define MQTT_CONNACK_TIMEOUT_MS     5000U
 #define MQTT_TRANSPORT_TIMEOUT_MS   1000U
 
-/* How often a reading is measured and published once connected: once
- * immediately on (re)connect, then on this interval. 10 min matches the
- * keepalive above, so publishes also double as the traffic keeping the
- * session alive - no separate idle PINGREQ needed most cycles. */
-/* Also doubles as the ONLY wake interval for the whole task once
- * connected/idle - see mqtt_printf_task(). Every call to MQTT_ProcessLoop()
- * needs the radio to come fully active (not just DTIM10's passive listen
- * wake) to service the socket, which draws far more current than idle -
- * confirmed by measurement: even a 10s poll (an earlier, more cautious
- * choice than strictly necessary) was producing a periodic ~30uA->170uA
- * spike every single cycle, all day, whether or not there was anything to
- * do. Neither this nor MQTT_KEEPALIVE_SEC need anywhere near that kind of
- * precision, so the task now sleeps for this entire interval in one shot -
- * a single wake per cycle, the minimum possible for this workload. */
+/* Scheduled tick interval: MQTT_ProcessLoop() keepalive only (see
+ * mqtt_printf_task()) - NOT a sensor read anymore (removed 2026-08-12,
+ * see vcnl3020_measure_and_publish()'s comment). 10 min matches
+ * MQTT_KEEPALIVE_SEC above, so this tick's traffic doubles as the
+ * keepalive itself - no separate idle PINGREQ needed most cycles. Also
+ * doubles as the ONLY scheduled wake interval for the whole task - see
+ * mqtt_printf_task(). Every call to MQTT_ProcessLoop() needs the radio to
+ * come fully active (not just DTIM10's passive listen wake) to service
+ * the socket, which draws far more current than idle - confirmed by
+ * measurement: even a 10s poll (an earlier, more cautious choice than
+ * strictly necessary) was producing a periodic ~30uA->170uA spike every
+ * single cycle, all day, whether or not there was anything to do. Neither
+ * this nor MQTT_KEEPALIVE_SEC need anywhere near that kind of precision,
+ * so the task sleeps for this entire interval in one shot - a single
+ * scheduled wake per cycle, the minimum possible for this workload
+ * (proximity publishes on top of this are event-driven, from a genuine
+ * VCNL3020 interrupt - see vcnl3020_interrupt_publish() - and don't
+ * disturb this schedule either way). */
 #define MQTT_PUBLISH_INTERVAL_MS    600000U
 
-/* Set to 0 to establish WLAN + MQTT and then stay fully silent in DTIM10
- * sleep (no periodic publish at all) - useful for a clean baseline
- * sleep-current measurement with no traffic whatsoever. Default 1: publish
- * an SHT40 reading on connect and every MQTT_PUBLISH_INTERVAL_MS after.
- * Either way, MQTT_ProcessLoop() still runs to service the connection
- * (keepalive, incoming data), and the on-demand "measure" command on
- * sensor/cmd still works, though it may take up to a full
- * MQTT_PUBLISH_INTERVAL_MS to be noticed and acted on - acceptable given
- * the priority here is minimum wake count/power, not responsiveness. */
-#define MQTT_AUTO_PUBLISH 1
+/* Minimum gap between VCNL3020-interrupt-triggered service passes. NOT a
+ * "missed event" risk - vcnl3020_interrupt_publish() already only
+ * publishes on a real CLOSED<->OPEN transition (see s_vcnl_state), so a
+ * same-side re-fire is cheap to service. This gate is defense-in-depth
+ * kept from an earlier, now-root-caused investigation: without it, a
+ * chattering /INT line (turned out to be this file's own old per-access
+ * I2C "close+reopen" workaround self-triggering more chatter, not real
+ * touch events or board wiring - see vcnl3020.c's top-of-file comment)
+ * drove MQTT_ProcessLoop()+publish on every single spurious edge, cadence
+ * ~95ms, materially worse than the original 2.5s poller it replaced. That
+ * root cause is fixed now (vcnl3020.c no longer reopens I2C preemptively),
+ * but this costs nothing to leave in as a backstop against any future
+ * noisy-line scenario. Matches CONTACT_SENSOR_MIN_INTERRUPT_GAP_MS's
+ * value/reasoning in contact_sensor_task.c, the same technique proven
+ * there for the same physical sensor. */
+#define VCNL3020_MIN_SERVICE_GAP_MS 3000U
 
 #define info_printf(msg, ...) printf("MQTT_TEST: " msg, ##__VA_ARGS__)
 
@@ -93,11 +160,16 @@ static uint8_t           s_mqtt_buf[MQTT_NETWORK_BUF_SIZE];
 static volatile int      s_publish_now;
 static TaskHandle_t      s_task_handle;
 static volatile uint8_t  s_started;
+static uint32_t          s_next_vcnl_service_ms; /* earliest time another VCNL3020-notify wake is actually serviced */
+static uint8_t           s_vcnl_state = 0xFFU; /* neither OPEN(0) nor CLOSED(1) - forces the first real event through, see vcnl3020_interrupt_publish() */
 
 /* ------------------------------------------------------------------ */
 /*  SHT40 / I2C - ported from qcli_demo/src/sht40_task.c                */
+/*  SHT40 removed - sensor no longer used, replaced by VCNL3020 -       */
+/*  commented out on 2026-08-12                                        */
 /* ------------------------------------------------------------------ */
 
+#if 0
 #define SHT40_I2C_ADDR              0x44
 #define SHT40_CMD_MEAS              0xFD
 
@@ -200,6 +272,16 @@ static int sht40_measure(int *temp_x10, int *rh_x10)
 
     return 0;
 }
+#endif /* SHT40 removed - replaced by VCNL3020 */
+
+/* ------------------------------------------------------------------ */
+/*  VCNL3020 / I2C - interrupt-driven, sole owner of the sensor (see    */
+/*  this file's top-of-file comment). No dedicated task and no polling  */
+/*  loop - vcnl3020_init() is called once below, from this task; the    */
+/*  sensor free-runs on its own from then on (see vcnl3020.c/.h) and    */
+/*  only ever wakes this task via VCNL3020_NOTIFY_BIT, on a genuine     */
+/*  threshold crossing.                                                  */
+/* ------------------------------------------------------------------ */
 
 /* ------------------------------------------------------------------ */
 /*  MQTT transport / callbacks                                          */
@@ -333,6 +415,9 @@ static int mqtt_connect_and_subscribe(void)
     return 0;
 }
 
+/* SHT40 removed - sensor no longer used, replaced by VCNL3020 - commented
+ * out on 2026-08-12 */
+#if 0
 static int mqtt_publish(int temp_x10, int rh_x10)
 {
     char msg[48];
@@ -355,7 +440,33 @@ static int mqtt_publish(int temp_x10, int rh_x10)
 
     return MQTT_Publish(&s_mqtt_ctx, &pub, 0) == MQTTSuccess ? 0 : -1;
 }
+#endif /* SHT40 removed - replaced by VCNL3020 */
 
+static int mqtt_publish_proximity(uint16_t proximity)
+{
+    char msg[32];
+    int len;
+    MQTTPublishInfo_t pub;
+
+    len = snprintf(msg, sizeof(msg), "Proximity=%u", (unsigned)proximity);
+    if (len <= 0 || len >= (int)sizeof(msg))
+        return -1;
+
+    memset(&pub, 0, sizeof(pub));
+    pub.qos = MQTTQoS0;
+    pub.retain = false;
+    pub.dup = false;
+    pub.pTopicName = MQTT_TOPIC_PUB;
+    pub.topicNameLength = sizeof(MQTT_TOPIC_PUB) - 1;
+    pub.pPayload = msg;
+    pub.payloadLength = (size_t)len;
+
+    return MQTT_Publish(&s_mqtt_ctx, &pub, 0) == MQTTSuccess ? 0 : -1;
+}
+
+/* SHT40 removed - sensor no longer used, replaced by VCNL3020 - commented
+ * out on 2026-08-12 */
+#if 0
 /* Take one SHT40 reading and publish it. Used both right after connecting
  * and on the periodic MQTT_PUBLISH_INTERVAL_MS tick.
  *
@@ -397,12 +508,87 @@ static int sht40_measure_and_publish(void)
     info_printf("Temp=%d.%dC Feuchte=%d.%d%%\n", temp_x10 / 10, temp_x10 % 10, rh_x10 / 10, rh_x10 % 10);
     return mqtt_publish(temp_x10, rh_x10) == 0 ? 0 : -1;
 }
+#endif /* SHT40 removed - replaced by VCNL3020 */
+
+/* Periodic (MQTT_PUBLISH_INTERVAL_MS tick) proximity read+publish -
+ * REMOVED 2026-08-12, see this file's top-of-file comment: this function's
+ * own I2C read (vcnl3020_read_result(), 2 register reads = 4 I2C
+ * transactions) was enough bus activity to still induce a handful of
+ * false GPIO3 edges every 10 minutes (crosstalk, same underlying
+ * mechanism as the original interrupt storm, just a much smaller residual
+ * dose) - confirmed on hardware via serial log timestamps landing exactly
+ * on MQTT_PUBLISH_INTERVAL_MS boundaries. The standalone demo/
+ * vcnl3020_test_demo this file's sensor logic is ported from does ZERO
+ * periodic reads of any kind - proximity is only ever read when servicing
+ * a genuine GPIO3 interrupt (see vcnl3020_interrupt_publish()). Matching
+ * that exactly removes the last self-inflicted I2C activity near GPIO3;
+ * the periodic tick below now does only MQTT_ProcessLoop() (keepalive),
+ * no sensor I2C access at all. Left here (not deleted) for reference. */
+#if 0
+static int vcnl3020_measure_and_publish(void)
+{
+    uint16_t proximity;
+
+    if (vcnl3020_read_result(&proximity) != 0) {
+        info_printf("VCNL3020 read failed, will retry next cycle\n");
+        return 1;
+    }
+
+    info_printf("Proximity=%u\n", (unsigned)proximity);
+    return mqtt_publish_proximity(proximity) == 0 ? 0 : -1;
+}
+#endif /* removed 2026-08-12 */
+
+/* Called after waking on VCNL3020_NOTIFY_BIT (every GPIO3 edge, not
+ * pre-filtered by which - if any - Interrupt Status Register bit fired;
+ * matches the design proven in demo/vcnl3020_test_demo). Services the
+ * interrupt (clears 0x8E, reads the fresh proximity value - see
+ * vcnl3020_service_interrupt()) and publishes ONLY on a real CLOSED<->OPEN
+ * transition, tracked via s_vcnl_state: the sensor's own hardware keeps
+ * re-asserting /INT roughly every self-timed period while proximity stays
+ * on one side, and each of those re-fires is still serviced over I2C, it
+ * just produces no new publish since STATUS hasn't changed - same
+ * behavior as the standalone demo's STATUS-only-on-change print.
+ * Returns 0 (nothing published, or published successfully - the caller
+ * only cares about connection failures) or -1 (MQTT_Publish() itself
+ * failed - a real connection problem, caller should reconnect). */
+static int vcnl3020_interrupt_publish(void)
+{
+    uint16_t proximity;
+    uint8_t state;
+
+    if (vcnl3020_service_interrupt(&proximity) != 0) {
+        info_printf("VCNL3020 interrupt service failed (I2C), reconfiguring sensor\n");
+        vcnl3020_init();
+        return 0; /* not an MQTT connection problem */
+    }
+
+    state = (proximity >= VCNL3020_THRESHOLD_HIGH) ? 1U : 0U;
+    if (state == s_vcnl_state)
+        return 0; /* no real change - nothing to publish */
+    s_vcnl_state = state;
+
+    info_printf("STATUS: %s (raw=%u)\n", state ? "CLOSED" : "OPEN", (unsigned)proximity);
+    return mqtt_publish_proximity(proximity) == 0 ? 0 : -1;
+}
 
 static void mqtt_printf_task(void *arg)
 {
     (void)arg;
 
-    sht40_open();
+    /* SHT40 removed - sensor no longer used, replaced by VCNL3020 -
+     * commented out on 2026-08-12 */
+    // sht40_open();
+
+    /* Arms the VCNL3020's self-timed + threshold-interrupt mode and
+     * captures THIS task as the target for VCNL3020_NOTIFY_BIT (see
+     * vcnl3020_init()) - no separate task, no polling loop. Retried here
+     * (rather than failing the whole task) since a transient I2C hiccup at
+     * boot shouldn't take MQTT connectivity down with it. */
+    while (vcnl3020_init() != 0) {
+        info_printf("VCNL3020 init failed, retry in 5s\n");
+        vTaskDelay(pdMS_TO_TICKS(5000));
+    }
 
     /* Let DHCP / network settle after WLAN connect before opening the
      * MQTT socket. */
@@ -428,12 +614,52 @@ static void mqtt_printf_task(void *arg)
 
         for (;;) {
             MQTTStatus_t st;
+            uint32_t notified = 0;
+            BaseType_t woke;
 
             if (!g_wifi_ready) {
                 Plaintext_Disconnect(&s_net_ctx);
                 break;
             }
 
+            /* Block for up to one full MQTT_PUBLISH_INTERVAL_MS - the same
+             * single-scheduled-wake cadence as before - UNLESS the VCNL3020
+             * raises a threshold-crossing interrupt first, in which case
+             * wake immediately just for that one event. This does NOT add
+             * a new periodic wake source: the timeout below is the exact
+             * same MQTT_PUBLISH_INTERVAL_MS wait that was already here,
+             * just expressed as a notify-wait instead of a plain delay so
+             * a real sensor event can cut it short. */
+            woke = xTaskNotifyWait(0, ULONG_MAX, &notified, pdMS_TO_TICKS(MQTT_PUBLISH_INTERVAL_MS));
+
+            if (woke == pdTRUE && (notified & VCNL3020_NOTIFY_BIT)) {
+                /* IMPORTANT: this branch must NOT fall through to the
+                 * scheduled MQTT_ProcessLoop()/publish block below - this
+                 * was NOT the scheduled tick. vcnl3020_interrupt_publish()
+                 * itself already silently no-ops any edge that doesn't
+                 * flip CLOSED<->OPEN (see s_vcnl_state there) - this gate
+                 * is additional defense-in-depth against a noisy line, see
+                 * VCNL3020_MIN_SERVICE_GAP_MS's comment for the root cause
+                 * that actually turned out to be. */
+                uint32_t now = hres_timer_curr_time_ms();
+
+                if (now >= s_next_vcnl_service_ms) {
+                    int result = vcnl3020_interrupt_publish();
+
+                    s_next_vcnl_service_ms = now + VCNL3020_MIN_SERVICE_GAP_MS;
+                    if (result < 0) {
+                        info_printf("publish failed, reconnecting\n");
+                        Plaintext_Disconnect(&s_net_ctx);
+                        s_publish_now = 0;
+                        break;
+                    }
+                }
+                continue; /* straight back to waiting - this was NOT the scheduled publish point */
+            }
+
+            /* Either the wait genuinely timed out (the scheduled publish
+             * point) or an unrecognized bit was set - either way, treat it
+             * as the scheduled tick, matching the original behavior. */
             st = MQTT_ProcessLoop(&s_mqtt_ctx);
             if (st != MQTTSuccess && st != MQTTNeedMoreBytes) {
                 info_printf("session lost (%d), reconnecting\n", (int)st);
@@ -441,19 +667,12 @@ static void mqtt_printf_task(void *arg)
                 break;
             }
 
-#if MQTT_AUTO_PUBLISH
-            /* No elapsed-time bookkeeping needed: every wake here already
-             * IS the scheduled publish point, since the vTaskDelay below
-             * sleeps for exactly one full MQTT_PUBLISH_INTERVAL_MS - this
-             * is the ONLY wake in the whole cycle, done deliberately to
-             * minimize how often the radio has to come active. An
-             * on-demand "measure" command that arrived on sensor/cmd
-             * during the sleep (buffered by the socket, picked up by
-             * MQTT_ProcessLoop() just above) folds into this same cycle
-             * rather than causing an early wake - fine given the
-             * priority here is minimum wake count, not responsiveness. */
+            /* SHT40/VCNL3020 removed from this tick - sensor no longer
+             * read here - commented out on 2026-08-12 */
+#if 0
             {
-                int result = sht40_measure_and_publish();
+                // int result = sht40_measure_and_publish();
+                int result = vcnl3020_measure_and_publish();
 
                 if (result < 0) {
                     info_printf("publish failed, reconnecting\n");
@@ -461,32 +680,17 @@ static void mqtt_printf_task(void *arg)
                     s_publish_now = 0;
                     break;
                 }
-                /* result == 1 (measurement-only hiccup, already logged
-                 * inside the helper): MQTT_ProcessLoop() above already
-                 * confirmed the session is fine. There's no faster retry
-                 * anymore - a bad reading now costs a full
-                 * MQTT_PUBLISH_INTERVAL_MS (10 min) wait before the next
-                 * attempt, traded deliberately for the lower wake
-                 * frequency. */
             }
-#endif /* MQTT_AUTO_PUBLISH */
+#endif /* removed 2026-08-12 - see this file's top-of-file comment */
             s_publish_now = 0;
-
-            /* Single wake per cycle - the minimum possible for this
-             * workload. MQTT_PUBLISH_INTERVAL_MS doubles as the
-             * MQTT_ProcessLoop() servicing cadence too (keepalive
-             * PINGREQ, if the publish above didn't already reset it) -
-             * no reason to wake more often than the publish schedule
-             * itself requires. */
-            vTaskDelay(pdMS_TO_TICKS(MQTT_PUBLISH_INTERVAL_MS));
         }
 
-        /* Brief pause before reconnect, same as the SHT40 publisher. */
+        /* Brief pause before reconnect. */
         vTaskDelay(pdMS_TO_TICKS(3000));
     }
 }
 
-/* Call once WLAN is connected (g_wifi_ready == 1) to start the SHT40
+/* Call once WLAN is connected (g_wifi_ready == 1) to start the VCNL3020
  * publisher. Safe to call more than once - only starts the task the first
  * time. */
 void mqtt_printf_task_start(void)

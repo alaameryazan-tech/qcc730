@@ -1096,7 +1096,16 @@ void Initialize_powertest_Demo(void)
         info_printf("powertest_wifi_connect create fail\n");
     }
 
-    /* Reading the I2C contact sensor doesn't need WLAN at all, so start it
-     * unconditionally here instead of from the CONNECT event handler. */
-    contact_sensor_task_start();
+    /* VCNL3020 removed from contact_sensor_task.c - sensor no longer used
+     * in interrupt/self-timed mode here, replaced by on-demand polling
+     * from mqtt_printf_task.c - commented out on 2026-08-12.
+     * contact_sensor_task.c's code is left intact (not deleted) for
+     * reference/rollback, but must NOT be re-enabled at the same time as
+     * mqtt_printf_task.c's VCNL3020 poller - both drive the same physical
+     * VCNL3020 (fixed I2C address 0x13) and would fight over its command
+     * register (self-timed/threshold-interrupt mode vs. on-demand mode)
+     * and over the shared I2C instance, with no mutex between the two
+     * tasks. See mqtt_printf_task.c's vcnl3020_poll_task() for the sensor's
+     * new sole owner. */
+    // contact_sensor_task_start();
 }

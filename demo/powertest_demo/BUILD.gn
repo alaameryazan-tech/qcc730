@@ -32,6 +32,8 @@ powertest_demo_src = [
 
     "src/contact_sensor_task.c",
 
+    "src/vcnl3020.c",
+
 ]
 
 

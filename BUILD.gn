@@ -105,6 +105,7 @@ projects_common = [
     "//modules/qat",
     "//demo/ambient_power_demo",
     "//modules/supplicant",
+    "//demo/vcnl3020_test_demo",
 ]
 
 if (!CONFIG_WPS_LIB) {

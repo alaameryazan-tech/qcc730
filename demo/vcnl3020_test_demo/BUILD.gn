@@ -5,11 +5,23 @@ import("//configs_decl.gni")
 
 vcnl3020_test_demo_inc = [
     "src",
+    "//drivers/wlan/",
 ]
 
 vcnl3020_test_demo_src = [
     "src/vcnl3020_test_demo_main.c",
     "src/vcnl3020_test.c",
+    "src/wifi_mqtt.c",
+
+    # WLAN driver sources - not pulled in globally here since prj.conf
+    # deliberately does not set CONFIG_WIFI_SHELL (wifi_mqtt.c is a
+    # shell/console-free WLAN client, same pattern as demo/mqtt_demo and
+    # demo/ambient_power_demo, which list these the same way).
+    "//drivers/wlan/wlan_drv.c",
+    "//drivers/wlan/qapi_wlan_base.c",
+    "//drivers/wlan/qapi_wlan_param_group.c",
+    "//drivers/wlan/wmi_api.c",
+    "//drivers/wlan/wlan_qapi_helper.c",
 ]
 
 not_needed("*", [ ])

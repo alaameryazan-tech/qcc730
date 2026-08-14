@@ -1,0 +1,29 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(//c/qcc7030/qcc7030sdk/comp/mqtt/source/**)",
+      "Bash(grep -v '\\\\.o$')",
+      "Bash(cd /c/qcc7030/qcc7030sdk/qccsdk/output/mqm730i/FERMION_VCNL3020_TEST_DEMO/DEBUG && ls | head -20 && tail -30 ../../../log/build.log 2>/dev/null | head -60)",
+      "Read(//c/log/**)",
+      "Bash(ninja -j1)",
+      "Read(//c/qcc7030/**)",
+      "Read(//c/qcc7030/qcc7030sdk/comp/freertos/**)",
+      "Bash(grep -rn \"nt_gpio_interrupt_config\\\\|nt_gpio_pin_interrupt_enable\" \"c:/qcc7030/qcc7030sdk\" --include=*.c --include=*.h 2>/dev/null)",
+      "Read(//c/qcc7030/qcc7030sdk/**)",
+      "PowerShell(Get-Process -Name openocd -ErrorAction SilentlyContinue)",
+      "Bash(python build.py --help)",
+      "Bash(python build.py -i FERMION_VCNL3020_TEST_DEMO -b qcc730v2_evb11_hostless)",
+      "Bash(python build.py --appdir=demo/vcnl3020_test_demo)",
+      "Bash(python set.py --appdir=demo/vcnl3020_test_demo)",
+      "Bash(python build.py --build)",
+      "Bash(echo \"EXIT=$?\")",
+      "Read(//c/Users/eurot/AppData/Local/Temp/claude/**)",
+      "Bash(grep -n -i \"error\" /c/Users/eurot/AppData/Local/Temp/claude/build_out2.log | grep -v \"no error\")",
+      "Bash(python qccsdk.py --help)",
+      "Bash(python qccsdk.py build --build)",
+      "WebFetch(domain:www.vishay.com)",
+      "Bash(find \"/c/Users/eurot/.claude/projects/c--qcc7030-qcc7030sdk-qccsdk/f6760c64-29ec-4a19-8890-54bc81f94539/tool-results\" -iname \"*.pdf\" 2>/dev/null)",
+      "Read(//c/Users/eurot/.claude/projects/c--qcc7030-qcc7030sdk-qccsdk/f6760c64-29ec-4a19-8890-54bc81f94539/tool-results/**)"
+    ]
+  }
+}

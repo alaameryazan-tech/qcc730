@@ -1,0 +1,12 @@
+[Fri, 14 Aug 2026 12:00:38]: Gen dot config ....
+[Fri, 14 Aug 2026 12:00:38]:  python  tools/kconfig_scripts/kconfig.py  --handwritten-input-configs  Kconfig  C:qcc7030qcc7030sdkqccsdkoutputmqm730i\FERMION_VCNL3020_TEST_DEMO\DEBUG\.config  C:qcc7030qcc7030sdkqccsdkoutputmqm730i\FERMION_VCNL3020_TEST_DEMO\DEBUG\autoconf.h  C:qcc7030qcc7030sdkqccsdkoutputmqm730i\FERMION_VCNL3020_TEST_DEMO\DEBUG\kconfig-files-list.log  --configs_in  boards/mqm730i/mqm730i_defconfig  demo/vcnl3020_test_demo/prj.conf 
+[Fri, 14 Aug 2026 12:00:38]: Parsing Kconfig
+
+[Fri, 14 Aug 2026 12:00:38]: Loaded configuration 'boards/mqm730i/mqm730i_defconfig'
+
+[Fri, 14 Aug 2026 12:00:38]: Merged configuration 'demo/vcnl3020_test_demo/prj.conf'
+
+[Fri, 14 Aug 2026 12:00:38]: Configuration saved to 'C:qcc7030qcc7030sdkqccsdkoutputmqm730i\FERMION_VCNL3020_TEST_DEMO\DEBUG\.config'
+
+[Fri, 14 Aug 2026 12:00:38]: Kconfig header saved to 'C:qcc7030qcc7030sdkqccsdkoutputmqm730i\FERMION_VCNL3020_TEST_DEMO\DEBUG\autoconf.h'
+

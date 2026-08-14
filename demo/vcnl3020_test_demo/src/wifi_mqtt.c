@@ -151,11 +151,18 @@
  * demo/powertest_demo and demo/ambient_power_demo use for the same thing.
  * Set before every qapi_WLAN_Commit(), see wlan_associate(). */
 #define VCNL3020_DTIM10_LISTEN_INTERVAL_TU  1000U
-/* BMPS idle-timeout passed to qapi_bmps_cfg() once BMPS engages - same
- * tuned value demo/ambient_power_demo/src/ambient_power_demo.c's
- * pm_enable() uses ("idle time is set to 200ms on previous demo, reduce to
- * 50ms here"). */
-#define VCNL3020_BMPS_IDLE_TIMEOUT_MS       50U
+/* BMPS idle-timeout passed to qapi_bmps_cfg() once BMPS engages. Was 50 -
+ * ambient_power_demo.c's tuned value - but on hardware here (2026-08-14)
+ * that value showed a real beacon-miss/reconnect storm right after BMPS
+ * engaged (climbing run_bmiss/bmiss counters in the console log, followed
+ * by a fresh WPA 4-way handshake, i.e. an actual disconnect+reconnect) -
+ * plausibly this AP not tolerating BMPS re-entering that aggressively.
+ * Reverted to 200 (ambient_power_demo.c's own comment: "idle time is set
+ * to 200ms on previous demo, reduce to 50ms here" - i.e. 200 was the more
+ * conservative, presumably more broadly-compatible starting point before
+ * that demo's own tuning). Re-lower once confirmed stable if the extra
+ * 150ms of idle-before-sleep matters for your power budget. */
+#define VCNL3020_BMPS_IDLE_TIMEOUT_MS       200U
 /* Delay after WLAN associates before engaging DTIM10/BMPS - gives a fixed
  * full-power window for WLAN+MQTT to fully establish before the radio
  * starts duty-cycling. */
@@ -514,16 +521,41 @@ static void wifi_mqtt_task(void *arg)
         /* ---- 3. Steady state: publish-on-event + 5s heartbeat ---- */
         for (;;) {
             uint8_t is_closed;
+            uint32_t wait_ms = MQTT_HEARTBEAT_INTERVAL_MS;
 
             if (!s_wifi_connected) {
                 info_printf("WLAN dropped, reconnecting\n");
                 break;
             }
 
-            if (!s_bmps_active && hres_timer_curr_time_ms() >= bmps_enable_at_ms)
-                dtim10_bmps_enable();
+            /* BUG FIX 2026-08-14: this check used to only ever get
+             * re-evaluated at the top of THIS loop, which is otherwise
+             * blocked inside xQueueReceive() below for up to
+             * MQTT_HEARTBEAT_INTERVAL_MS (10 min) at a time. With nothing
+             * to publish, that meant BMPS could sit un-engaged for up to
+             * 10 minutes after bmps_enable_at_ms actually passed - only a
+             * real STATUS-change event (which wakes xQueueReceive() early)
+             * made it re-check sooner, which is why entry looked
+             * "flaky"/slow instead of a reliable ~15s. Fix: while BMPS
+             * isn't active yet, cap the wait to however long is actually
+             * left until bmps_enable_at_ms, so this loop wakes up and
+             * re-checks right on schedule instead of waiting for the next
+             * unrelated event. Once BMPS is active this has no effect -
+             * wait_ms stays at the full heartbeat interval. */
+            if (!s_bmps_active) {
+                uint32_t now_ms = hres_timer_curr_time_ms();
 
-            if (xQueueReceive(s_publish_queue, &is_closed, pdMS_TO_TICKS(MQTT_HEARTBEAT_INTERVAL_MS)) == pdTRUE) {
+                if (now_ms >= bmps_enable_at_ms) {
+                    dtim10_bmps_enable();
+                } else {
+                    uint32_t remaining_ms = bmps_enable_at_ms - now_ms;
+
+                    if (remaining_ms < wait_ms)
+                        wait_ms = remaining_ms;
+                }
+            }
+
+            if (xQueueReceive(s_publish_queue, &is_closed, pdMS_TO_TICKS(wait_ms)) == pdTRUE) {
                 s_last_status = is_closed;
                 if (mqtt_publish_status(is_closed) != 0) {
                     info_printf("publish failed, reconnecting\n");

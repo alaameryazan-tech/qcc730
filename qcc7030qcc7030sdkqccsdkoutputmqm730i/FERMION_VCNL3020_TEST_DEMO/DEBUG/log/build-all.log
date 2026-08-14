@@ -1,0 +1,40 @@
+[Fri, 14 Aug 2026 12:00:38]: Gen regdb obj ....
+[Fri, 14 Aug 2026 12:00:38]: Gen dot config ....
+[Fri, 14 Aug 2026 12:00:38]:  python  tools/kconfig_scripts/kconfig.py  --handwritten-input-configs  Kconfig  C:qcc7030qcc7030sdkqccsdkoutputmqm730i\FERMION_VCNL3020_TEST_DEMO\DEBUG\.config  C:qcc7030qcc7030sdkqccsdkoutputmqm730i\FERMION_VCNL3020_TEST_DEMO\DEBUG\autoconf.h  C:qcc7030qcc7030sdkqccsdkoutputmqm730i\FERMION_VCNL3020_TEST_DEMO\DEBUG\kconfig-files-list.log  --configs_in  boards/mqm730i/mqm730i_defconfig  demo/vcnl3020_test_demo/prj.conf 
+[Fri, 14 Aug 2026 12:00:38]: Parsing Kconfig
+
+[Fri, 14 Aug 2026 12:00:38]: Loaded configuration 'boards/mqm730i/mqm730i_defconfig'
+
+[Fri, 14 Aug 2026 12:00:38]: Merged configuration 'demo/vcnl3020_test_demo/prj.conf'
+
+[Fri, 14 Aug 2026 12:00:38]: Configuration saved to 'C:qcc7030qcc7030sdkqccsdkoutputmqm730i\FERMION_VCNL3020_TEST_DEMO\DEBUG\.config'
+
+[Fri, 14 Aug 2026 12:00:38]: Kconfig header saved to 'C:qcc7030qcc7030sdkqccsdkoutputmqm730i\FERMION_VCNL3020_TEST_DEMO\DEBUG\autoconf.h'
+
+[Fri, 14 Aug 2026 12:00:38]: Gen auto config ....
+[Fri, 14 Aug 2026 12:00:38]:  python  tools/kconfig_scripts/kconfig.py  Kconfig  C:qcc7030qcc7030sdkqccsdkoutputmqm730i\FERMION_VCNL3020_TEST_DEMO\DEBUG\.config  C:qcc7030qcc7030sdkqccsdkoutputmqm730i\FERMION_VCNL3020_TEST_DEMO\DEBUG\autoconf.h  C:qcc7030qcc7030sdkqccsdkoutputmqm730i\FERMION_VCNL3020_TEST_DEMO\DEBUG\kconfig-files-list.log  --configs_in  C:qcc7030qcc7030sdkqccsdkoutputmqm730i\FERMION_VCNL3020_TEST_DEMO\DEBUG\.config 
+[Fri, 14 Aug 2026 12:00:39]: Parsing Kconfig
+
+[Fri, 14 Aug 2026 12:00:39]: Loaded configuration 'C:qcc7030qcc7030sdkqccsdkoutputmqm730i\FERMION_VCNL3020_TEST_DEMO\DEBUG\.config'
+
+[Fri, 14 Aug 2026 12:00:39]: No change to configuration in 'C:qcc7030qcc7030sdkqccsdkoutputmqm730i\FERMION_VCNL3020_TEST_DEMO\DEBUG\.config'
+
+[Fri, 14 Aug 2026 12:00:39]: No change to Kconfig header in 'C:qcc7030qcc7030sdkqccsdkoutputmqm730i\FERMION_VCNL3020_TEST_DEMO\DEBUG\autoconf.h'
+
+[Fri, 14 Aug 2026 12:00:39]: Gen gn main config ....
+[Fri, 14 Aug 2026 12:00:39]:  python  build/gn/scripts/process_dotconfig.py  C:qcc7030qcc7030sdkqccsdkoutputmqm730i\FERMION_VCNL3020_TEST_DEMO\DEBUG\.config  C:qcc7030qcc7030sdkqccsdkoutputmqm730i\FERMION_VCNL3020_TEST_DEMO\DEBUG\args.gn 
+[Fri, 14 Aug 2026 12:00:39]: Run dev_xml_cfg_debug.py ....
+[Fri, 14 Aug 2026 12:00:39]:  python  tools/host_tools/dev_cfg/dev_xml_cfg_debug.py  . 
+[Fri, 14 Aug 2026 12:00:40]: Run dev_cfg_debug.py ....
+[Fri, 14 Aug 2026 12:00:40]:  python  tools/host_tools/dev_cfg/dev_cfg_debug.py  . 
+[Fri, 14 Aug 2026 12:00:41]: Gen mib ....
+[Fri, 14 Aug 2026 12:00:41]:  python  modules/wifi/config_ini/mib/xml_gen_from_xml.py  tools/Target_tools/dev_cfg/export/master_xml.xml 
+[Fri, 14 Aug 2026 12:00:41]: is_sdk_packed: true
+[Fri, 14 Aug 2026 12:00:41]: Chip version: 2
+[Fri, 14 Aug 2026 12:00:41]: gn gen ....
+[Fri, 14 Aug 2026 12:00:41]:  gn  gen  C:qcc7030qcc7030sdkqccsdkoutputmqm730i\FERMION_VCNL3020_TEST_DEMO\DEBUG 
+[Fri, 14 Aug 2026 12:00:41]: ERROR Can't create the build dir.
+
+[Fri, 14 Aug 2026 12:00:41]: I could not create the build dir "C:/qcc7030/qcc7030sdk/qccsdk/C:qcc7030qcc7030sdkqccsdkoutputmqm730i/FERMION_VCNL3020_TEST_DEMO/DEBUG/".
+
+[Fri, 14 Aug 2026 12:00:41]: Failed

@@ -1,0 +1,9 @@
+[Fri, 14 Aug 2026 12:00:41]: is_sdk_packed: true
+[Fri, 14 Aug 2026 12:00:41]: Chip version: 2
+[Fri, 14 Aug 2026 12:00:41]: gn gen ....
+[Fri, 14 Aug 2026 12:00:41]:  gn  gen  C:qcc7030qcc7030sdkqccsdkoutputmqm730i\FERMION_VCNL3020_TEST_DEMO\DEBUG 
+[Fri, 14 Aug 2026 12:00:41]: ERROR Can't create the build dir.
+
+[Fri, 14 Aug 2026 12:00:41]: I could not create the build dir "C:/qcc7030/qcc7030sdk/qccsdk/C:qcc7030qcc7030sdkqccsdkoutputmqm730i/FERMION_VCNL3020_TEST_DEMO/DEBUG/".
+
+[Fri, 14 Aug 2026 12:00:41]: Failed

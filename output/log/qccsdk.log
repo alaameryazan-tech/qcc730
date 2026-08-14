@@ -1,25 +1,25 @@
-2026-08-14 11:01:09 DEBUG [2026-08-14 11:01:09] qccsdk.py Started. 
-2026-08-14 11:01:09 DEBUG run 0: set.py  --appdir=demo/vcnl3020_test_demo 
-2026-08-14 11:01:09 INFO cd C:\qcc7030\qcc7030sdk\qccsdk\tools\qccsdkpy
-2026-08-14 11:01:09 DEBUG Execute cmd as below with check=True enable=True logEnable=True logBlockMode=True waitFinish=True:
-2026-08-14 11:01:09 INFO python set.py  --appdir=demo/vcnl3020_test_demo 
-2026-08-14 11:01:09 INFO +++++++++++++++++++++++++++++++++++++++++++
+2026-08-14 14:29:32 DEBUG [2026-08-14 14:29:32] qccsdk.py Started. 
+2026-08-14 14:29:32 DEBUG run 0: set.py  --appdir=demo/vcnl3020_test_demo 
+2026-08-14 14:29:32 INFO cd C:\qcc7030\qcc7030sdk\qccsdk\tools\qccsdkpy
+2026-08-14 14:29:32 DEBUG Execute cmd as below with check=True enable=True logEnable=True logBlockMode=True waitFinish=True:
+2026-08-14 14:29:32 INFO python set.py  --appdir=demo/vcnl3020_test_demo 
+2026-08-14 14:29:32 INFO +++++++++++++++++++++++++++++++++++++++++++
 waitFinish=True
 run
-2026-08-14 11:01:09 WARNING CfgExternal['qccsdk'][appdir]==demo/vcnl3020_test_demo, skip
-2026-08-14 11:01:09 INFO -------------------------------------------
-2026-08-14 11:01:09 INFO cd C:\qcc7030\qcc7030sdk\qccsdk
-2026-08-14 11:01:09 DEBUG run 1: flash.py  --flash  --reset 
-2026-08-14 11:01:09 INFO cd C:\qcc7030\qcc7030sdk\qccsdk\tools\qccsdkpy
-2026-08-14 11:01:09 DEBUG Execute cmd as below with check=True enable=True logEnable=True logBlockMode=True waitFinish=True:
-2026-08-14 11:01:09 INFO python flash.py  --flash  --reset 
-2026-08-14 11:01:09 INFO +++++++++++++++++++++++++++++++++++++++++++
+2026-08-14 14:29:33 WARNING CfgExternal['qccsdk'][appdir]==demo/vcnl3020_test_demo, skip
+2026-08-14 14:29:33 INFO -------------------------------------------
+2026-08-14 14:29:33 INFO cd C:\qcc7030\qcc7030sdk\qccsdk
+2026-08-14 14:29:33 DEBUG run 1: flash.py  --flash  --reset 
+2026-08-14 14:29:33 INFO cd C:\qcc7030\qcc7030sdk\qccsdk\tools\qccsdkpy
+2026-08-14 14:29:33 DEBUG Execute cmd as below with check=True enable=True logEnable=True logBlockMode=True waitFinish=True:
+2026-08-14 14:29:33 INFO python flash.py  --flash  --reset 
+2026-08-14 14:29:33 INFO +++++++++++++++++++++++++++++++++++++++++++
 waitFinish=True
 run
-2026-08-14 11:01:10 INFO C:\qcc7030\qcc7030sdk\qccsdk\output\mqm730i\FERMION_NVM_PROGRAMMER\DEBUG\bin\FERMION_NVM_PROGRAMMER.elf
-2026-08-14 11:01:10 INFO cd C:\qcc7030\qcc7030sdk\qccsdk\tools/nvm_programmer/scripts
-2026-08-14 11:01:10 INFO python   nvm_programmer.py -s ch347  -f C:\qcc7030\qcc7030sdk\qccsdk\output\mqm730i\FERMION_VCNL3020_TEST_DEMO\DEBUG\bin\FERMION_VCNL3020_TEST_DEMO_HASHED.elf -i C:\qcc7030\qcc7030sdk\qccsdk\output\mqm730i\FERMION_NVM_PROGRAMMER\DEBUG\bin\FERMION_NVM_PROGRAMMER.elf -P -A 
-2026-08-14 11:01:10 INFO +++++++++++++++++++++++++++++++++++++++++++
+2026-08-14 14:29:33 INFO C:\qcc7030\qcc7030sdk\qccsdk\output\mqm730i\FERMION_NVM_PROGRAMMER\DEBUG\bin\FERMION_NVM_PROGRAMMER.elf
+2026-08-14 14:29:33 INFO cd C:\qcc7030\qcc7030sdk\qccsdk\tools/nvm_programmer/scripts
+2026-08-14 14:29:33 INFO python   nvm_programmer.py -s ch347  -f C:\qcc7030\qcc7030sdk\qccsdk\output\mqm730i\FERMION_VCNL3020_TEST_DEMO\DEBUG\bin\FERMION_VCNL3020_TEST_DEMO_HASHED.elf -i C:\qcc7030\qcc7030sdk\qccsdk\output\mqm730i\FERMION_NVM_PROGRAMMER\DEBUG\bin\FERMION_NVM_PROGRAMMER.elf -P -A 
+2026-08-14 14:29:33 INFO +++++++++++++++++++++++++++++++++++++++++++
 Open On-Chip Debugger 0.12.0+dev (2026-03-17-12:08)
 Licensed under GNU GPL v2
 For bug reports, read
@@ -32,141 +32,26 @@ Info : CH347 open success
 Info : Requested speed of 8000 kHz is not possible. Using the next higher speed of 15000 kHz!
 Info : Requested speed of 8000 kHz is not possible. Using the next higher speed of 15000 kHz!
 Info : clock speed 15000 kHz
-Info : JTAG tap: QCC730.chp tap/device found: 0x0029f0e1 (mfg: 0x070 (Qualcomm), part: 0x029f, ver: 0x0)
-master tap-enable
-Info : JTAG tap: QCC730.chp disabled
-Info : JTAG tap: QCC730.cpu enabled
-Info : [QCC730.cpu] Cortex-M4 r0p1 processor detected
-Info : [QCC730.cpu] target has 6 breakpoints, 4 watchpoints
-Info : [QCC730.cpu] Examination succeed
+Error: JTAG scan chain interrogation failed: all zeroes
+Error: Check JTAG interface, timings, target power, etc.
+Error: Trying to use configured scan chain anyway...
+Error: QCC730.chp: IR capture error; saw 0x00 not 0x01
+Warn : Bypassing JTAG setup events due to errors
 Info : [QCC730.cpu] starting gdb server on 3333
 Info : Listening on port 3333 for gdb connections
-Info : JTAG tap: QCC730.chp tap/device found: 0x0029f0e1 (mfg: 0x070 (Qualcomm), part: 0x029f, ver: 0x0)
-master tap-enable
-Info : JTAG tap: QCC730.chp disabled
-Info : JTAG tap: QCC730.cpu enabled
-[QCC730.cpu] halted due to debug-request, current mode: Thread 
-xPSR: 0x01000000 pc: 0x002001a8 msp: 0x0000a000
+Error: JTAG scan chain interrogation failed: all zeroes
+Error: Check JTAG interface, timings, target power, etc.
+Error: Trying to use configured scan chain anyway...
+Error: QCC730.chp: IR capture error; saw 0x00 not 0x01
+Warn : Bypassing JTAG setup events due to errors
 Info : Listening on port 6666 for tcl connections
 Info : Listening on port 4444 for telnet connections
 Info : accepting 'gdb' connection on tcp/3333
-warning: No executable has been specified and target does not support
-determining executable automatically.  Try using the "file" command.
-[2026-08-14 11:01:15,678] INFO: Checking for files to add to the image for Firmware Descriptor Table 0 File:gen_fwd_table.py:649 Function:gen_xml_program 
-[2026-08-14 11:01:15,686] INFO: Done Generating XML file to program. File:gen_fwd_table.py:687 Function:gen_xml_program 
- Info: Generate partition table...
- Info: Generate FWD table...
- Info: Generate download table...
- Info: Done generating download table
-Python 3.11.5 (tags/v3.11.5:cce6ba9, Aug 24 2023, 14:38:34) [MSC v.1936 64 bit (AMD64)]
-********************************************************************************
-********************************************************************************
-Starting GDB Server...
-Using OpenOCD GDB server
-C:\Users\eurot\.qcc_ide\Sdks\1.0.0^qccsdk_qcc730\../../Tools\openocdForCh347\0.12.0+dev\../../openocdForCh347/0.12.0+dev/ch347-main/OpenOCD_CH347/bin\openocd.exe -c gdb_port 3333 -f ./qcc730_openocd_ch347.cfg
-********************************************************************************
-Starting GDB Client...
-GDB tool port:   127.0.0.1:19383
-GDB client port: 127.0.0.1:52181
-********************************************************************************
-Initializing GDB...
-********************************************************************************
-********************************************************************************
-Programming C:/qcc7030/qcc7030sdk/qccsdk/tools/storage/firmware_desc_table/curr_age_fdt/frn_curr_age_default.bin
-Programming 1024 bytes to rram 0x00208000
-.
-Image programmed successfully, time elapsed 0.2861754894256592 seconds.
-Programming C:/qcc7030/qcc7030sdk/qccsdk/output/mqm730i/FERMION_SBL/DEBUG/bin/FERMION_SBL_HASHED.elf
-Programming 21824 bytes to rram 0x0020A400
-.
-Image programmed successfully, time elapsed 0.7632896900177002 seconds.
-Programming C:/qcc7030/qcc7030sdk/qccsdk/output/mqm730i/FERMION_SBL/DEBUG/bin/FERMION_SBL_HASHED.elf
-Programming 21824 bytes to rram 0x00212400
-.
-Image programmed successfully, time elapsed 1.2566523551940918 seconds.
-Programming C:/qcc7030/qcc7030sdk/qccsdk/tools/fw_upgrade/firmware_table.bin
-Programming 4096 bytes to flash 0x00000000
-.
-Image programmed successfully, time elapsed 0.3509514331817627 seconds.
-Programming C:/qcc7030/qcc7030sdk/qccsdk/output/mqm730i/FERMION_VCNL3020_TEST_DEMO/DEBUG/bin/FERMION_VCNL3020_TEST_DEMO_HASHED.elf
-Programming 757824 bytes to flash 0x00043000
-........................shutdown command invoked
-Error: [QCC730.cpu] Execution of event gdb-detach failed:
-
-Info : dropped 'gdb' connection
-
-Image programmed successfully, time elapsed 21.29031276702881 seconds.
-Partial erasing flash 65536 bytes from 0x00003000, please wait for a moment ......
-Partial erase successfully, time elapsed 0.10929036140441895 seconds.
-Partial erasing flash 65536 bytes from 0x00013000, please wait for a moment ......
-Partial erase successfully, time elapsed 0.1107943058013916 seconds.
-Partial erasing flash 8192 bytes from 0x00001000, please wait for a moment ......
-Partial erase successfully, time elapsed 0.1076209545135498 seconds.
-Partial erasing flash 65536 bytes from 0x00023000, please wait for a moment ......
-Partial erase successfully, time elapsed 0.11218881607055664 seconds.
-Partial erasing flash 65536 bytes from 0x00033000, please wait for a moment ......
-Partial erase successfully, time elapsed 0.10491681098937988 seconds.
-
-2026-08-14 11:01:40 INFO -------------------------------------------
-2026-08-14 11:01:40 INFO python  nvm_programmer.py -s ch347  --reset -i C:\qcc7030\qcc7030sdk\qccsdk\output\mqm730i\FERMION_NVM_PROGRAMMER\DEBUG\bin\FERMION_NVM_PROGRAMMER.elf 
-2026-08-14 11:01:40 INFO +++++++++++++++++++++++++++++++++++++++++++
-Open On-Chip Debugger 0.12.0+dev (2026-03-17-12:08)
-Licensed under GNU GPL v2
-For bug reports, read
-	http://openocd.org/doc/doxygen/bugs.html
-DEPRECATED! use 'gdb port', not 'gdb_port'
-DEPRECATED! use 'gdb breakpoint_override', not 'gdb_breakpoint_override'
-force hard breakpoints
-Info : ugIndex == 0
-Info : CH347 open success
-Info : Requested speed of 8000 kHz is not possible. Using the next higher speed of 15000 kHz!
-Info : Requested speed of 8000 kHz is not possible. Using the next higher speed of 15000 kHz!
-Info : clock speed 15000 kHz
-Info : JTAG tap: QCC730.chp tap/device found: 0x4ba06477 (mfg: 0x23b (ARM Ltd), part: 0xba06, ver: 0x4)
-master tap-enable
-Info : JTAG tap: QCC730.chp disabled
-Info : JTAG tap: QCC730.cpu enabled
-Info : [QCC730.cpu] Cortex-M4 r0p1 processor detected
-Info : [QCC730.cpu] target has 6 breakpoints, 4 watchpoints
-Info : [QCC730.cpu] Examination succeed
-Info : [QCC730.cpu] starting gdb server on 3333
-Info : Listening on port 3333 for gdb connections
-Info : JTAG tap: QCC730.chp tap/device found: 0x0029f0e1 (mfg: 0x070 (Qualcomm), part: 0x029f, ver: 0x0)
-master tap-enable
-Info : JTAG tap: QCC730.chp disabled
-Info : JTAG tap: QCC730.cpu enabled
-[QCC730.cpu] halted due to debug-request, current mode: Thread 
-xPSR: 0x01000000 pc: 0x002001a8 msp: 0x0000a000
-Info : Listening on port 6666 for tcl connections
-Info : Listening on port 4444 for telnet connections
-Info : accepting 'gdb' connection on tcp/3333
-warning: No executable has been specified and target does not support
-determining executable automatically.  Try using the "file" command.
-Error: Error on socket 'GDB': WSAGetLastError==10054, message: Eine vorhandene Verbindung wurde vom Remotehost geschlossen.
-.
-Error: JTAG-DP STICKY ERROR
-shutdown command invoked
-Error: [QCC730.cpu] Execution of event gdb-detach failed:
-
-Info : dropped 'gdb' connection
-Python 3.11.5 (tags/v3.11.5:cce6ba9, Aug 24 2023, 14:38:34) [MSC v.1936 64 bit (AMD64)]
-********************************************************************************
-********************************************************************************
-Starting GDB Server...
-Using OpenOCD GDB server
-C:\Users\eurot\.qcc_ide\Sdks\1.0.0^qccsdk_qcc730\../../Tools\openocdForCh347\0.12.0+dev\../../openocdForCh347/0.12.0+dev/ch347-main/OpenOCD_CH347/bin\openocd.exe -c gdb_port 3333 -f ./qcc730_openocd_ch347.cfg
-********************************************************************************
-Starting GDB Client...
-GDB tool port:   127.0.0.1:19383
-GDB client port: 127.0.0.1:59704
-********************************************************************************
-Initializing GDB...
-********************************************************************************
-********************************************************************************
-Reset system.
-
-2026-08-14 11:01:44 INFO -------------------------------------------
-2026-08-14 11:01:44 INFO cd C:\qcc7030\qcc7030sdk\qccsdk\tools\qccsdkpy
-2026-08-14 11:01:44 INFO -------------------------------------------
-2026-08-14 11:01:44 INFO cd C:\qcc7030\qcc7030sdk\qccsdk
-2026-08-14 11:01:44 DEBUG [2026-08-14 11:01:44] qccsdk.py Succeeded. 
+Error: Target not examined yet
+Error: [QCC730.cpu] Execution of event gdb-attach failed:
+embedded:startup.tcl:1647: Error: 
+Traceback (most recent call last):
+  File "embedded:startup.tcl", line 1647
+    halt 1000
+Error: [QCC730.cpu] Target not examined yet, refuse gdb connection 1!
+Error: attempted 'gdb' connection rejected

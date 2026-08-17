@@ -5,9 +5,11 @@
 
 /* Minimal WLAN connect + MQTT publisher, added ONLY to report VCNL3020
  * STATUS transitions (see vcnl3020_test.c) to an MQTT broker - nothing
- * else. GPIO3 interrupt handling, threshold config, ISR logic and STATUS
- * detection in vcnl3020_test.c are UNTOUCHED; this file is purely additive.
- * The two sides are decoupled via vcnl3020_mqtt_publish_status()'s queue
+ * else. Threshold config and STATUS detection in vcnl3020_test.c are
+ * UNTOUCHED; this file is purely additive, but it does now drive WHEN
+ * vcnl3020_test.c checks the sensor (see the pre-BMPS poll and pin-22
+ * sections below) - vcnl3020_test.c no longer owns any GPIO interrupt
+ * itself. The two sides are decoupled via vcnl3020_mqtt_publish_status()'s queue
  * (see wifi_mqtt.h) so the sensor task never blocks on WLAN/MQTT I/O -
  * vcnl3020_test.c's only change is one non-blocking call at its existing
  * STATUS-print site.
@@ -60,7 +62,8 @@
  *
  * Pin-22 (EXT_WAKEUP_INTR_N) interrupt wake during BMPS (added 2026-08-17,
  * see bmps_wake_probe_cb()): the VCNL3020's /INT is physically wired to
- * chip pin 22 in addition to GPIO3. init_aon_ext_wakeup_int() arms that pin
+ * chip pin 22 (only - GPIO3 is no longer used, see vcnl3020_test.c's top
+ * comment). init_aon_ext_wakeup_int() arms that pin
  * automatically at boot (FIRMWARE_APPS_INFORMED_WAKE is unconditionally
  * defined for this chip - see build/freertos/common/application_code/
  * main.c), and its ISR has a dedicated BMPS-wake path
@@ -70,10 +73,14 @@
  * while genuinely in BMPS "Sleep". Confirmed on hardware: a real touch now
  * produces qapi_bmps_get_exit_reason() == 7, not the reason=2 of an
  * ordinary DTIM wake - i.e. a real GPIO edge now forces its own BMPS exit,
- * independent of the natural DTIM cadence. No independent poll timer
- * anywhere in this file - bmps_wake_probe_cb()'s PWR_EVT_WMAC_POST_AWAKE
- * handler is the only trigger, and it only ever rides a wake the WLAN
- * firmware was already doing on its own (DTIM timer or pin 22). */
+ * independent of the natural DTIM cadence. bmps_wake_probe_cb()'s
+ * PWR_EVT_WMAC_POST_AWAKE handler is the ONLY trigger while BMPS is active -
+ * it only ever rides a wake the WLAN firmware was already doing on its own
+ * (DTIM timer or pin 22), no independent timer while BMPS is on. There IS a
+ * separate, independent poll timer for the pre-BMPS window specifically
+ * (see prebmps_poll_start()/VCNL3020_PREBMPS_POLL_INTERVAL_MS below) - that
+ * one is fine because the radio isn't duty-cycling in that window anyway,
+ * so it doesn't force anything extra the way a poll DURING BMPS would. */
 
 #include <string.h>
 #include <stdint.h>
@@ -105,10 +112,11 @@
 
 #include "wifi_mqtt.h"
 
-/* vcnl3020_test.c - piggyback target for bmps_wake_probe_cb() below. No
- * dedicated header in this project (see vcnl3020_test_start()'s own extern
- * in vcnl3020_test_demo_main.c), so declared the same way here. */
-extern void vcnl3020_test_bmps_wake_poll(void);
+/* vcnl3020_test.c - poll trigger target, called both from
+ * bmps_wake_probe_cb() and prebmps_poll_timer_cb() below. No dedicated
+ * header in this project (see vcnl3020_test_start()'s own extern in
+ * vcnl3020_test_demo_main.c), so declared the same way here. */
+extern void vcnl3020_test_poll_now(void);
 
 #ifndef DEV_STA_ID
 #define DEV_STA_ID 1
@@ -280,6 +288,47 @@ static qapi_Status_t wlan_associate(void)
     return qapi_WLAN_Commit(DEV_STA_ID);
 }
 
+/* Pre-BMPS periodic poll (added 2026-08-17) - covers the window between
+ * WLAN connect and BMPS actually engaging (VCNL3020_BMPS_ENTER_DELAY_MS,
+ * ~15s), now that GPIO3 is no longer used at all (see vcnl3020_test.c's top
+ * comment). The radio is NOT duty-cycling in this window regardless of
+ * whether this timer exists, so a plain poll here costs nothing extra -
+ * unlike polling DURING BMPS, which forces its own radio wake every cycle
+ * (see this file's history/git log for why that was rejected as the
+ * steady-state mechanism). Created lazily, started when WLAN connects
+ * (see wifi_mqtt_task()), stopped the moment BMPS actually engages (see
+ * dtim10_bmps_enable() below) or the connection drops (see
+ * wifi_mqtt_task()'s cleanup path) - pin 22 (bmps_wake_probe_cb()) is the
+ * only trigger once BMPS is active. */
+#define VCNL3020_PREBMPS_POLL_INTERVAL_MS   500U
+
+static TimerHandle_t s_prebmps_poll_timer;
+
+static void prebmps_poll_timer_cb(TimerHandle_t timer)
+{
+    (void)timer;
+    vcnl3020_test_poll_now();
+}
+
+static void prebmps_poll_start(void)
+{
+    if (s_prebmps_poll_timer == NULL) {
+        s_prebmps_poll_timer = nt_create_timer(prebmps_poll_timer_cb, NULL,
+            pdMS_TO_TICKS(VCNL3020_PREBMPS_POLL_INTERVAL_MS), pdTRUE);
+        if (s_prebmps_poll_timer == NULL) {
+            info_printf("pre-BMPS poll timer create failed\n");
+            return;
+        }
+    }
+    nt_start_timer(s_prebmps_poll_timer);
+}
+
+static void prebmps_poll_stop(void)
+{
+    if (s_prebmps_poll_timer != NULL)
+        nt_stop_timer(s_prebmps_poll_timer);
+}
+
 /* ------------------------------------------------------------------ */
 /*  DTIM10/BMPS - engaged VCNL3020_BMPS_ENTER_DELAY_MS after WLAN        */
 /*  associates, disengaged before any reconnect attempt. See this file's */
@@ -307,6 +356,10 @@ static void dtim10_bmps_enable(void)
 
     qapi_bmps_cfg(1, VCNL3020_BMPS_IDLE_TIMEOUT_MS);
 
+    /* Pin 22 (bmps_wake_probe_cb()) takes over from here - no reason to
+     * keep forcing a plain poll now that BMPS is actually active. */
+    prebmps_poll_stop();
+
     s_bmps_active = TRUE;
     info_printf("DTIM10/BMPS engaged\n");
 }
@@ -327,16 +380,16 @@ static void dtim10_bmps_disable(void)
  * sleep_wakeup_cb() (drivers/lowpower/qapi_lowpower.c) registers this
  * against PWR_EVT_WMAC_PRE_SLEEP / PWR_EVT_WMAC_POST_AWAKE /
  * PWR_EVT_WMAC_SLEEP_ABORT (wifi_fw_pwr_cb_infra.h) - real WMAC power
- * events, not a timer this file invented. Originally added to measure the
- * chip's own natural DTIM wake cadence; now doubles as the actual trigger
- * now that the VCNL3020's /INT is physically wired to chip pin 22 as well
- * as GPIO3. Confirmed on hardware: a real touch/release now makes BMPS
- * exit via qapi_bmps_get_exit_reason() == 7 (EXIT_REASON_EXT_INT, see
- * aon_a2f_assert_isr_handler()'s SUPPORT_SWTMR_TO_WKUP_FROM_BMPS branch in
- * wifi_fw_ext_intr.c), not just the natural DTIM-timer wake (reason 2) - so
- * POST_AWAKE now fires promptly on a real event instead of only every
- * ~30-45s. No independent poll timer anywhere in this file - every trigger
- * here rides a wake the WLAN firmware was already doing on its own. */
+ * events, not a timer this file invented. The VCNL3020's /INT is physically
+ * wired to chip pin 22 (EXT_WAKEUP_INTR_N) - GPIO3 is no longer used at all
+ * (see vcnl3020_test.c's top comment for why). Confirmed on hardware: a
+ * real touch/release makes BMPS exit via qapi_bmps_get_exit_reason() == 7
+ * (EXIT_REASON_EXT_INT, see aon_a2f_assert_isr_handler()'s
+ * SUPPORT_SWTMR_TO_WKUP_FROM_BMPS branch in wifi_fw_ext_intr.c), not just
+ * the natural DTIM-timer wake (reason 2) - so POST_AWAKE fires promptly on
+ * a real event instead of only every ~30-45s. This is the ONLY trigger
+ * while BMPS is active - see prebmps_poll_timer_cb() for the separate
+ * pre-BMPS mechanism. */
 static void bmps_wake_probe_cb(uint8_t evt, const void *p_args)
 {
     const char *name = "?";
@@ -347,7 +400,7 @@ static void bmps_wake_probe_cb(uint8_t evt, const void *p_args)
         name = "PRE_SLEEP";
     } else if (evt & PWR_EVT_WMAC_POST_AWAKE) {
         name = "POST_AWAKE";
-        vcnl3020_test_bmps_wake_poll();
+        vcnl3020_test_poll_now();
     } else if (evt & PWR_EVT_WMAC_SLEEP_ABORT) {
         name = "SLEEP_ABORT";
     }
@@ -553,6 +606,10 @@ static void wifi_mqtt_task(void *arg)
             (unsigned)(VCNL3020_BMPS_ENTER_DELAY_MS / 1000U));
         bmps_enable_at_ms = hres_timer_curr_time_ms() + VCNL3020_BMPS_ENTER_DELAY_MS;
 
+        /* Covers the sensor until pin 22 takes over once BMPS actually
+         * engages - see prebmps_poll_start()'s comment. */
+        prebmps_poll_start();
+
         /* ---- DHCP (skip if a lease from an earlier cycle is still bound) ---- */
         if (!wlan_dhcp_bound()) {
             while (s_wifi_connected && wlan_start_dhcp() != QAPI_OK) {
@@ -646,8 +703,12 @@ static void wifi_mqtt_task(void *arg)
         }
 
         /* Something dropped (WLAN or MQTT) - leave power-save BEFORE
-         * attempting any recovery: never stay in DTIM10/BMPS mid-reconnect. */
+         * attempting any recovery: never stay in DTIM10/BMPS mid-reconnect.
+         * Also stop the pre-BMPS poll unconditionally - covers the case
+         * where the connection dropped before BMPS ever got a chance to
+         * engage (dtim10_bmps_enable() never ran, so never stopped it). */
         dtim10_bmps_disable();
+        prebmps_poll_stop();
         Plaintext_Disconnect(&s_net_ctx);
         vTaskDelay(pdMS_TO_TICKS(3000));
     }

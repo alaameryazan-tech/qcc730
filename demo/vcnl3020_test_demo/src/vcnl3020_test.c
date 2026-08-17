@@ -3,56 +3,60 @@
  * SPDX-License-Identifier: BSD-3-Clause-Clear
  */
 
-/* VCNL3020 bring-up test - INTERRUPT-DRIVEN on GPIO3, for manually
- * verifying the /INT wiring itself, now also publishing every STATUS
- * transition to MQTT (see wifi_mqtt.c/.h - same broker/WLAN config as
- * demo/powertest_demo's contact_sensor_task.c/mqtt_printf_task.c). This
- * file's own GPIO3/I2C/threshold logic is untouched by that addition - the
- * only new line is the vcnl3020_mqtt_publish_status() call right at the
- * existing STATUS-print site below, which just queues the event for
- * wifi_mqtt.c's own task (non-blocking, safe to call before WLAN/MQTT are
- * even up).
+/* VCNL3020 bring-up test - publishes every STATUS transition to MQTT (see
+ * wifi_mqtt.c/.h - same broker/WLAN config as demo/powertest_demo's
+ * contact_sensor_task.c/mqtt_printf_task.c).
  *
- * BMPS I2C-reopen retry (added 2026-08-14, see vcnl3020_i2c_reopen()/
- * vcnl3020_service_interrupt()) - once wifi_mqtt.c's DTIM10/BMPS engages,
- * the host I2C peripheral can go stale after an idle gap (same issue
- * already documented/fixed for this sensor in demo/powertest_demo/src/
- * vcnl3020.c); without a retry, a GPIO3 edge landing on a failed I2C access
- * would silently drop the event AND leave the sensor's Interrupt Status
- * Register uncleared, latching /INT low and killing all future
- * STATUS/MQTT updates for good (the EDGE_FALLING trigger can never re-fire
- * on a line that never goes back high).
+ * ARCHITECTURE (rewritten 2026-08-17 - GPIO3 removed entirely):
  *
- * Behavior under BMPS is otherwise unchanged: a real STATUS transition (or
- * the MQTT heartbeat) is just a normal socket send, which wakes the radio
- * briefly and returns to the DTIM10 duty cycle on its own - no action
- * needed here for that part.
+ *   This file no longer owns any GPIO interrupt. All detection is a plain
+ *   on-demand I2C read (vcnl3020_poll_and_clear()), triggered from
+ *   wifi_mqtt.c via vcnl3020_test_poll_now() at two different times:
  *
- * Wiring: SDA, SCL, VDD, GND, PLUS /INT -> GPIO3 (open-drain, active LOW -
- * external ~10k pull-up to 3V3 recommended; the SoC's own internal pull-up
- * is also enabled below as a backup only).
+ *     1. A plain periodic timer, ONLY while WLAN is connected and BMPS has
+ *        not engaged yet (the ~15s full-power window right after connect,
+ *        see VCNL3020_BMPS_ENTER_DELAY_MS in wifi_mqtt.c) - the radio isn't
+ *        duty-cycling in that window regardless, so a plain poll costs
+ *        nothing extra there (unlike polling DURING BMPS, which forces its
+ *        own radio wake every cycle - see wifi_mqtt.c's history for why
+ *        that was rejected as the steady-state mechanism).
+ *     2. wifi_mqtt.c's bmps_wake_probe_cb(), on a real
+ *        PWR_EVT_WMAC_POST_AWAKE event - which now fires promptly on a real
+ *        touch/release once BMPS is active, because the VCNL3020's /INT is
+ *        physically wired to chip pin 22 (EXT_WAKEUP_INTR_N) in addition to
+ *        (now former) GPIO3. See wifi_mqtt.c's top-of-file comment for the
+ *        full mechanism (init_aon_ext_wakeup_int() / aon_a2f_assert_isr_
+ *        handler() / EXIT_REASON_EXT_INT).
  *
- * On every GPIO3 falling edge: read + clear the Interrupt Status Register
- * (0x8E, releasing /INT so future interrupts can fire), then read the
- * current proximity result (0x87/0x88) and compare it against
- * HIGH_THRESHOLD to decide CLOSED/OPEN - not from which 0x8E bit fired, so
- * this stays correct even if debounce/threshold register config changes
- * later. No periodic polling anywhere in this file - every print is
- * directly caused by a real GPIO3 edge.
+ *   Why GPIO3 was removed rather than kept alongside pin 22: GPIO3's
+ *   EDGE_FALLING interrupt cannot fire at all while BMPS "Sleep" is active
+ *   (confirmed via the QCC730M-1 datasheet's power-mode table - CPU is OFF
+ *   in that mode), so it only ever covered the pre-BMPS window - exactly
+ *   the window the plain timer poll above now covers instead, without
+ *   needing a second physical wire or the GPIO controller at all.
+ *
+ *   vcnl3020_poll_and_clear() still reads+clears the sensor's Interrupt
+ *   Status Register (0x8E) on every call, even though nothing here is
+ *   edge-triggered off it anymore: the VCNL3020 does NOT release its
+ *   open-drain /INT line on its own once the underlying condition clears -
+ *   only an explicit host write-1-to-clear does that. Skipping this would
+ *   let /INT latch low after the very first threshold crossing and never
+ *   produce another edge, which would silently break the pin-22 path
+ *   (mechanism 2 above) after one use, even though plain polling (which
+ *   reads the raw result registers directly, unaffected by ISR/INT state)
+ *   would keep working. Same one-shot I2C-reopen-and-retry pattern as
+ *   before if a transfer fails (see vcnl3020_i2c_reopen()'s comment) - the
+ *   QCC730 I2C host peripheral goes stale after a WLAN BMPS/DTIM10 idle
+ *   period (same root cause already documented/fixed for this sensor in
+ *   demo/powertest_demo/src/vcnl3020.c).
+ *
+ * Wiring: SDA, SCL, VDD, GND, PLUS /INT -> chip pin 22 (EXT_WAKEUP_INTR_N),
+ * open-drain, active LOW - external ~10k pull-up to 3V3 recommended.
  *
  * Prints exactly one thing, only when the decided status CHANGES from the
  * last one printed:
  *   VCNL3020: STATUS: OPEN
  *   VCNL3020: STATUS: CLOSED
- *
- * This is deliberately the signal for manually judging the wiring itself:
- *   - idle, nothing touching the sensor -> silent (no interrupts at all)
- *   - touch/cover -> exactly one "STATUS: CLOSED"
- *   - release -> exactly one "STATUS: OPEN"
- *   - repeated/rapid STATUS lines with nothing touched -> GPIO3/the /INT
- *     line itself is electrically unstable (floating, missing/weak
- *     pull-up, bad connection) - that is exactly what this build exists
- *     to expose, not a bug in the logic below.
  *
  * TUNE ME - HIGH_THRESHOLD: proximity >= this -> CLOSED, else OPEN, AND
  * this exact value is written into the sensor's own High Threshold
@@ -64,19 +68,7 @@
  * ~2140-2160 (about 20 counts of noise), and a hand near the sensor read
  * ~4857 rising to ~15000+ - a huge, clean gap. 3000 sits comfortably in the
  * middle. Adjust if your own testing shows it should be more/less
- * sensitive.
- *
- * TEMPORARY DIAGNOSTIC (added 2026-08-12, VCNL3020_RAW_DEBUG_ENABLE below) -
- * this project's STATUS lines were staying completely silent after boot
- * even when touching the sensor, unlike an earlier isolated test build that
- * printed clean RAW baselines and correct transitions. To tell apart "I2C/
- * sensor communication itself is broken in this project" from "I2C is fine,
- * GPIO3 interrupts specifically aren't firing/being serviced", this adds
- * back an on-demand RAW proximity print once a second, running ALONGSIDE
- * the interrupt-driven STATUS logic below (same task, same I2C bus, just
- * time-sliced against the interrupt wait - no separate task, no removal of
- * any interrupt code). Set VCNL3020_RAW_DEBUG_ENABLE to 0 once the GPIO3
- * issue is root-caused. */
+ * sensitive. */
 
 #include <stdint.h>
 #include <stdio.h>
@@ -86,7 +78,6 @@
 #include "task.h"
 
 #include "qapi_i2c.h"
-#include "qapi_gpio.h"
 
 #include "wifi_mqtt.h"
 
@@ -124,25 +115,17 @@
 #define HIGH_THRESHOLD                 3000U
 #define LOW_THRESHOLD                  0U
 
-/* /INT wiring under test - see this file's top comment. */
-#define VCNL3020_INT_GPIO_ID           QAPI_GPIO_ID3_E
-
-/* xTaskNotify() bit set from vcnl3020_gpio_isr(). */
-#define VCNL3020_NOTIFY_BIT            (1U << 0)
-/* xTaskNotify() bit set from vcnl3020_test_bmps_wake_poll() - see that
- * function's comment. Deliberately a separate bit from VCNL3020_NOTIFY_BIT
- * so the task can tell a real GPIO3 edge apart from a pin-22
- * (EXT_WAKEUP_INTR_N) BMPS wake when both are pending at once
- * (xTaskNotifyWait() below waits on the OR of both). */
-#define VCNL3020_BMPS_WAKE_POLL_BIT    (1U << 1)
+/* xTaskNotify() bit set from vcnl3020_test_poll_now() - see that
+ * function's comment. Single trigger type now (pre-BMPS timer poll and
+ * pin-22 BMPS-wake both call the same function), no need to distinguish
+ * sources. */
+#define VCNL3020_POLL_NOW_BIT          (1U << 0)
 
 #define info_printf(msg, ...) printf("VCNL3020: " msg, ##__VA_ARGS__)
 
 static TaskHandle_t s_task_handle;
-/* Last OPEN(0)/CLOSED(1) status actually printed/published - shared between
- * the GPIO3-edge path and the pin-22 BMPS-wake path below so either one can
- * detect a real transition regardless of which path last updated it.
- * 0xFF = unknown, forces the first real reading through. */
+/* Last OPEN(0)/CLOSED(1) status actually printed/published. 0xFF = unknown,
+ * forces the first real reading through. */
 static uint8_t s_last_state = 0xFFU;
 
 static int vcnl3020_write_reg(uint8_t reg, uint8_t val)
@@ -214,9 +197,7 @@ static int vcnl3020_read_result_once(uint16_t *out_proximity)
  * idle period (same root cause already documented/fixed for this same
  * sensor in demo/powertest_demo/src/vcnl3020.c and for the SHT40 sensor
  * elsewhere in this SDK). Only invoked as a one-shot recovery retry when an
- * access has already failed once (see vcnl3020_service_interrupt() below) -
- * never preemptively, so it costs nothing while WLAN/BMPS isn't involved
- * (e.g. the standalone build with no WLAN at all). */
+ * access has already failed once. */
 static int vcnl3020_i2c_reopen(void)
 {
     qapi_I2CM_Config_t cfg = { .Blocking = 1, .Dma = 0 };
@@ -231,17 +212,12 @@ static int vcnl3020_i2c_reopen(void)
 
 /* Read+clear the Interrupt Status Register (releasing /INT) and read the
  * fresh proximity result - each with ONE reopen-and-retry if the I2C
- * transfer itself fails (see vcnl3020_i2c_reopen()'s comment). Without this
- * retry, an I2C failure right when BMPS engages would silently drop the
- * event AND leave the ISR register uncleared, which latches the open-drain
- * /INT line low forever - since this file arms GPIO3 as EDGE_FALLING (see
- * vcnl3020_gpio_isr()'s comment), a line that never returns high can never
- * produce another falling edge, permanently stopping all future STATUS
- * updates and MQTT publishes. Returns 0 on success, -1 on an unrecoverable
- * I2C failure (caller should just wait for the next event, no sensor
- * reconfigure needed - only the host I2C peripheral state was reset, the
- * sensor's own threshold/self-timed config is untouched). */
-static int vcnl3020_service_interrupt(uint16_t *out_proximity)
+ * transfer itself fails (see vcnl3020_i2c_reopen()'s comment). See this
+ * file's top comment for why the ISR clear still matters even though
+ * nothing here is edge-triggered anymore (it's what lets pin 22 see a
+ * fresh edge on the NEXT transition). Returns 0 on success, -1 on an
+ * unrecoverable I2C failure. */
+static int vcnl3020_poll_and_clear(uint16_t *out_proximity)
 {
     uint8_t isr = 0;
 
@@ -266,76 +242,22 @@ static int vcnl3020_service_interrupt(uint16_t *out_proximity)
     return 0;
 }
 
-/* On-demand plain read of the latest self-timed result for the pin-22
- * BMPS-wake path (see vcnl3020_test_bmps_wake_poll()) - does NOT touch the
- * Interrupt Status Register at all, so it's harmless to call regardless of
- * whether a real GPIO3 interrupt is also pending; that will still be
- * serviced normally by vcnl3020_service_interrupt() whenever/if it arrives.
- * One reopen-and-retry on failure, same reasoning as
- * vcnl3020_service_interrupt() above. */
-static int vcnl3020_read_result(uint16_t *out_proximity)
-{
-    if (vcnl3020_read_result_once(out_proximity) == 0)
-        return 0;
-
-    if (vcnl3020_i2c_reopen() != 0)
-        return -1;
-
-    return vcnl3020_read_result_once(out_proximity);
-}
-
-/* Called (via VCNL3020_BMPS_WAKE_POLL_BIT) from wifi_mqtt.c's
- * bmps_wake_probe_cb() - registered against a real qapi_bmps_sleep_wakeup_cb()
- * PWR_EVT_WMAC_POST_AWAKE event. Confirmed on hardware (2026-08-17) that
- * physically wiring the VCNL3020's /INT to chip pin 22
- * (EXT_WAKEUP_INTR_N, armed automatically at boot via
- * init_aon_ext_wakeup_int() - FIRMWARE_APPS_INFORMED_WAKE is unconditionally
- * defined for this chip) makes a real touch/release force BMPS to exit with
- * a distinct reason (qapi_bmps_get_exit_reason() == 7, i.e.
- * EXIT_REASON_EXT_INT, not the reason=2 of a normal DTIM wake) - see
- * aon_a2f_assert_isr_handler() in wifi_fw_ext_intr.c, specifically its
- * SUPPORT_SWTMR_TO_WKUP_FROM_BMPS branch (also unconditionally defined for
- * this chip) which calls nt_bmps_wakeup_callback(EXIT_REASON_EXT_INT)
- * whenever pin 22 asserts while genuinely in BMPS "Sleep". This is a plain
- * xTaskNotify(), safe to call from any task context (this is NOT the raw
- * GPIO ISR - vcnl3020_gpio_isr()'s "no I2C, no printf" restriction does not
- * apply here). */
-void vcnl3020_test_bmps_wake_poll(void)
+/* Called from wifi_mqtt.c at two different times - see this file's top
+ * comment: the pre-BMPS periodic poll timer, and bmps_wake_probe_cb()'s
+ * PWR_EVT_WMAC_POST_AWAKE handler (pin-22 BMPS wake). Plain xTaskNotify(),
+ * safe to call from any task/callback context. */
+void vcnl3020_test_poll_now(void)
 {
     if (s_task_handle != NULL)
-        xTaskNotify(s_task_handle, VCNL3020_BMPS_WAKE_POLL_BIT, eSetBits);
-}
-
-/* Runs in GPIO interrupt-controller context - bare minimum only (no I2C,
- * no printf).
- *
- * EDGE_FALLING, not level-triggered, and that choice is load-bearing: the
- * VCNL3020's /INT stays asserted low until the owning task clears
- * VCNL3020_REG_ISR over I2C, and a level trigger left enabled during that
- * window would re-fire the instant this ISR returns - forever, without
- * ever letting the notified task run. EDGE_FALLING sidesteps that: it
- * fires exactly once per high-to-low transition regardless of how long the
- * line then stays low, so nothing needs masking/unmasking - the interrupt
- * just stays enabled permanently after the one
- * qapi_GPIO_Enable_Interrupt() call below. */
-static void vcnl3020_gpio_isr(qapi_GPIO_CB_Data_t data)
-{
-    BaseType_t woken = pdFALSE;
-
-    (void)data;
-
-    if (s_task_handle != NULL) {
-        xTaskNotifyFromISR(s_task_handle, VCNL3020_NOTIFY_BIT, eSetBits, &woken);
-        portYIELD_FROM_ISR(woken);
-    }
+        xTaskNotify(s_task_handle, VCNL3020_POLL_NOW_BIT, eSetBits);
 }
 
 /* I2C open + LED current + proximity rate + static threshold registers +
- * interrupt control + self-timed enable + GPIO3 interrupt arm. */
+ * interrupt control + self-timed enable. No GPIO/interrupt-controller setup
+ * here anymore - see this file's top comment. */
 static int vcnl3020_configure(void)
 {
     qapi_I2CM_Config_t i2c_cfg = { .Blocking = 1, .Dma = 0 };
-    qapi_GPIO_Config_t gpio_cfg;
     uint8_t icr = VCNL3020_ICR_THRES_EN_BIT |
                   (uint8_t)(VCNL3020_INT_COUNT_EXCEED << VCNL3020_ICR_COUNT_EXCEED_SHIFT);
 
@@ -354,7 +276,10 @@ static int vcnl3020_configure(void)
     }
 
     /* Registers 0x8A-0x8D: static LOW=0/HIGH=HIGH_THRESHOLD, written once,
-     * never re-armed. */
+     * never re-armed. Still needed even though this file no longer owns a
+     * GPIO interrupt: this is what makes the sensor assert /INT at all, and
+     * pin 22 (wired externally, armed by wifi_mqtt.c's side) depends on
+     * that real electrical edge. */
     if (vcnl3020_write_reg(VCNL3020_REG_LOW_THR_HI, (uint8_t)(LOW_THRESHOLD >> 8)) != 0 ||
         vcnl3020_write_reg(VCNL3020_REG_LOW_THR_LO, (uint8_t)(LOW_THRESHOLD & 0xFF)) != 0 ||
         vcnl3020_write_reg(VCNL3020_REG_HIGH_THR_HI, (uint8_t)(HIGH_THRESHOLD >> 8)) != 0 ||
@@ -381,17 +306,8 @@ static int vcnl3020_configure(void)
         return -1;
     }
 
-    /* GPIO3 armed LAST, after selftimed_en/prox_en are already set. */
-    memset(&gpio_cfg, 0, sizeof(gpio_cfg));
-    gpio_cfg.Dir = QAPI_GPIO_INPUT_E;
-    gpio_cfg.Pull = QAPI_GPIO_PULL_UP_E; /* backup for the recommended external pull-up - see this file's top comment */
-    gpio_cfg.Drive = QAPI_GPIO_DRIVE_LOW_E; /* irrelevant for an input, kept in a defined state */
-    qapi_GPIO_Config(VCNL3020_INT_GPIO_ID, &gpio_cfg);
-
-    qapi_GPIO_Enable_Interrupt(VCNL3020_INT_GPIO_ID, QAPI_GPIO_TRIGGER_EDGE_FALLING_E, vcnl3020_gpio_isr, 0);
-
-    info_printf("armed: self-timed + threshold interrupt on GPIO%d, HIGH=%u, LED=%umA\n",
-        (int)VCNL3020_INT_GPIO_ID, (unsigned)HIGH_THRESHOLD, (unsigned)VCNL3020_LED_CURRENT_MA);
+    info_printf("armed: self-timed + threshold interrupt, HIGH=%u, LED=%umA (poll-driven, see wifi_mqtt.c)\n",
+        (unsigned)HIGH_THRESHOLD, (unsigned)VCNL3020_LED_CURRENT_MA);
     return 0;
 }
 
@@ -399,8 +315,10 @@ static void vcnl3020_test_task(void *arg)
 {
     (void)arg;
 
-    /* s_task_handle must be valid before qapi_GPIO_Enable_Interrupt() runs
-     * inside vcnl3020_configure() - the ISR notifies it. */
+    /* s_task_handle must be valid before wifi_mqtt.c can ever call
+     * vcnl3020_test_poll_now() - vcnl3020_mqtt_start()/wifi_mqtt_task()
+     * always run after vcnl3020_test_start() in vcnl3020_test_demo_main.c,
+     * but set this before vcnl3020_configure() regardless, defensively. */
     s_task_handle = xTaskGetCurrentTaskHandle();
 
     while (vcnl3020_configure() != 0) {
@@ -408,65 +326,18 @@ static void vcnl3020_test_task(void *arg)
         vTaskDelay(pdMS_TO_TICKS(5000));
     }
 
-    /* PURE event-driven - no periodic sensor I2C access anywhere in this
-     * loop (removed 2026-08-14, previously VCNL3020_POLL_FALLBACK_PERIOD_MS).
-     * That poll was added after hardware testing seemed to show GPIO3 edges
-     * going unserviced once wifi_mqtt.c's DTIM10/BMPS engaged, but it was
-     * itself paying for that: every poll cycle forced a full "wakebmps"
-     * radio wake (documented on this exact SoC), which is precisely the
-     * per-cycle radio-wake cost DTIM10/BMPS exists to avoid - a timer-driven
-     * "backstop" is a contradiction of "signal only on a real state change".
-     * This SDK already has a proven, hardware-confirmed precedent for this
-     * exact situation (VCNL3020 interrupt-driven contact sensing WITH
-     * DTIM10/BMPS engaged, same SoC): demo/powertest_demo/src/vcnl3020.c +
-     * mqtt_printf_task.c. There, an apparently similar "interrupt not
-     * behaving" symptom was root-caused NOT to a BMPS/GPIO hardware
-     * limitation but to periodic/per-access I2C churn itself generating
-     * electrical crosstalk near GPIO3 (see vcnl3020.c's top-of-file
-     * comment) - i.e. self-inflicted by exactly the kind of periodic I2C
-     * poll this loop used to run. The fix there was the same one applied
-     * here: zero periodic sensor I2C access, block indefinitely
-     * (portMAX_DELAY, no timeout) and let the sensor's own hardware
-     * threshold comparator be the only thing that ever wakes this task. If
-     * real GPIO3 edges do turn out to still be missed under BMPS on this
-     * specific board (a separate, unconfirmed possibility - the "3 tests"
-     * that motivated the removed poll ran at a much noisier 2s/5s poll
-     * cadence than reproduced), that would show up as touches with no
-     * "GPIO3 notified" line at all with this build.
-     *
-     * ALSO waits on VCNL3020_BMPS_WAKE_POLL_BIT (added 2026-08-17, no
-     * separate timer involved) - see vcnl3020_test_bmps_wake_poll()'s
-     * comment: a real GPIO3-line edge now also reaches this task via chip
-     * pin 22 (EXT_WAKEUP_INTR_N) even while BMPS is asleep, confirmed on
-     * hardware (qapi_bmps_get_exit_reason() == 7 / EXIT_REASON_EXT_INT on a
-     * real touch). No forced/independent poll timer anywhere in this file -
-     * both notify bits are genuinely event-driven. */
+    /* Blocks indefinitely - every wake here is a real trigger from
+     * wifi_mqtt.c (pre-BMPS timer poll or pin-22 BMPS wake), never an
+     * independent timer owned by this file. See this file's top comment. */
     for (;;) {
         uint32_t notified;
         uint16_t proximity;
 
-        xTaskNotifyWait(0, VCNL3020_NOTIFY_BIT | VCNL3020_BMPS_WAKE_POLL_BIT, &notified, portMAX_DELAY);
+        xTaskNotifyWait(0, VCNL3020_POLL_NOW_BIT, &notified, portMAX_DELAY);
 
-        if (notified & VCNL3020_NOTIFY_BIT) {
-            /* Real GPIO3 edge - read + clear the Interrupt Status Register
-             * (releases /INT) and read the fresh proximity result, retrying
-             * once via an I2C reopen on failure. */
-            info_printf("GPIO3 notified\n");
-
-            if (vcnl3020_service_interrupt(&proximity) != 0) {
-                info_printf("interrupt service failed (I2C), will retry\n");
-                continue;
-            }
-        } else {
-            /* pin-22 (EXT_WAKEUP_INTR_N) BMPS wake - plain on-demand read,
-             * does NOT touch the Interrupt Status Register (see
-             * vcnl3020_read_result()). */
-            info_printf("pin22 BMPS wake, checking sensor\n");
-
-            if (vcnl3020_read_result(&proximity) != 0) {
-                info_printf("pin22-wake read failed (I2C), will retry next wake\n");
-                continue;
-            }
+        if (vcnl3020_poll_and_clear(&proximity) != 0) {
+            info_printf("poll read failed (I2C), will retry next trigger\n");
+            continue;
         }
 
         {
@@ -474,8 +345,7 @@ static void vcnl3020_test_task(void *arg)
 
             if (state != s_last_state) {
                 s_last_state = state;
-                info_printf("STATUS: %s (raw=%u, via %s)\n", state ? "CLOSED" : "OPEN",
-                    (unsigned)proximity, (notified & VCNL3020_NOTIFY_BIT) ? "GPIO3" : "pin22");
+                info_printf("STATUS: %s (raw=%u)\n", state ? "CLOSED" : "OPEN", (unsigned)proximity);
                 /* Non-blocking - hands off to wifi_mqtt.c's own task, see
                  * vcnl3020_mqtt_publish_status()'s header comment. Queued
                  * even before WLAN/MQTT come up; safe to call unconditionally. */

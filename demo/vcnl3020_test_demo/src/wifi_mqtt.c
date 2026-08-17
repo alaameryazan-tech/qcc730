@@ -176,11 +176,21 @@ extern void vcnl3020_test_poll_now(void);
  * without needing a separate roaming timer. */
 #define VCNL3020_WLAN_CONNECT_WAIT_MS       15000U
 
-/* DTIM10: listen interval = 1000 TU = 10 x 100 TU (default AP beacon
- * interval), i.e. wake every 10th beacon instead of every one - same value
- * demo/powertest_demo and demo/ambient_power_demo use for the same thing.
- * Set before every qapi_WLAN_Commit(), see wlan_associate(). */
-#define VCNL3020_DTIM10_LISTEN_INTERVAL_TU  1000U
+/* Listen interval = 1500 TU = 15 x 100 TU (default AP beacon interval),
+ * i.e. wake every 15th beacon instead of every one. Raised from DTIM10
+ * (1000 TU, same value demo/powertest_demo and demo/ambient_power_demo use)
+ * on 2026-08-17 - now that pin 22 forces its own BMPS exit independent of
+ * the natural DTIM schedule (see bmps_wake_probe_cb()), the DTIM interval
+ * no longer affects touch-detection latency at all, only background beacon
+ * housekeeping cost - so it's safe to extend as long as this AP tolerates
+ * it. Test incrementally if raising further: a too-long interval risks
+ * missed broadcast traffic or the AP dropping the association (same class
+ * of AP-compatibility issue as the earlier BMPS_IDLE_TIMEOUT_MS
+ * beacon-miss storm - see that macro's comment). Set before every
+ * qapi_WLAN_Commit(), see wlan_associate(). NOTE: still named "DTIM10" in
+ * some older comments/console strings elsewhere in this file - cosmetic
+ * only, not re-swept for this experimental change. */
+#define VCNL3020_DTIM10_LISTEN_INTERVAL_TU  1500U
 /* BMPS idle-timeout passed to qapi_bmps_cfg() once BMPS engages. Was 50 -
  * ambient_power_demo.c's tuned value - but on hardware here (2026-08-14)
  * that value showed a real beacon-miss/reconnect storm right after BMPS

@@ -121,7 +121,16 @@
  * sources. */
 #define VCNL3020_POLL_NOW_BIT          (1U << 0)
 
+/* Master log switch - off by default to save the UART/CPU-active time
+ * every printf() costs. Flip to 1 to get every line back for debugging -
+ * no call sites change either way. */
+#define VCNL3020_LOG_ENABLE            0
+
+#if VCNL3020_LOG_ENABLE
 #define info_printf(msg, ...) printf("VCNL3020: " msg, ##__VA_ARGS__)
+#else
+#define info_printf(msg, ...) do {} while (0)
+#endif
 
 static TaskHandle_t s_task_handle;
 /* Last OPEN(0)/CLOSED(1) status actually printed/published. 0xFF = unknown,

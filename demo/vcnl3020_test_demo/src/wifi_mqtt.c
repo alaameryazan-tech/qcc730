@@ -198,7 +198,16 @@ extern void vcnl3020_test_poll_now(void);
  * starts duty-cycling. */
 #define VCNL3020_BMPS_ENTER_DELAY_MS        15000U
 
+/* Master log switch - off by default to save the UART/CPU-active time
+ * every printf() costs. Flip to 1 to get every line back for debugging -
+ * no call sites change either way. */
+#define VCNL3020_MQTT_LOG_ENABLE       0
+
+#if VCNL3020_MQTT_LOG_ENABLE
 #define info_printf(msg, ...) printf("VCNL3020_MQTT: " msg, ##__VA_ARGS__)
+#else
+#define info_printf(msg, ...) do {} while (0)
+#endif
 
 static qbool_t s_wlan_enabled;    /* qapi_WLAN_Enable() done - once, ever */
 static qbool_t s_wifi_connected;  /* set/cleared by wlan_event_cb on CONNECT/DISCONNECT */
@@ -584,6 +593,12 @@ static void wifi_mqtt_task(void *arg)
      * bmps_wake_probe_cb()'s comment. Harmless to register before BMPS
      * ever engages; it simply won't fire until it does. */
     qapi_bmps_sleep_wakeup_cb(bmps_wake_probe_cb, 1);
+
+    /* Silence the WLAN firmware's own BMPS debug log (the "P"/"B"/
+     * "wakebmps"/"H"/"Exit: reason=..." lines) - real console/UART activity
+     * on every BMPS cycle, not just cosmetic. Runtime WMI call, only
+     * affects this demo's own BMPS session. */
+    qapi_bmps_log_enable(0);
 
     /* Outer loop = one full (re)connect cycle: WLAN association, then DHCP
      * (only if not already bound), then MQTT connect. Re-entered from the

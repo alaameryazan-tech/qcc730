@@ -129,10 +129,21 @@
 
 /* xTaskNotify() bit set from vcnl3020_gpio_isr(). */
 #define VCNL3020_NOTIFY_BIT            (1U << 0)
+/* xTaskNotify() bit set from vcnl3020_test_bmps_wake_poll() - see that
+ * function's comment. Deliberately a separate bit from VCNL3020_NOTIFY_BIT
+ * so the task can tell a real GPIO3 edge apart from a pin-22
+ * (EXT_WAKEUP_INTR_N) BMPS wake when both are pending at once
+ * (xTaskNotifyWait() below waits on the OR of both). */
+#define VCNL3020_BMPS_WAKE_POLL_BIT    (1U << 1)
 
 #define info_printf(msg, ...) printf("VCNL3020: " msg, ##__VA_ARGS__)
 
 static TaskHandle_t s_task_handle;
+/* Last OPEN(0)/CLOSED(1) status actually printed/published - shared between
+ * the GPIO3-edge path and the pin-22 BMPS-wake path below so either one can
+ * detect a real transition regardless of which path last updated it.
+ * 0xFF = unknown, forces the first real reading through. */
+static uint8_t s_last_state = 0xFFU;
 
 static int vcnl3020_write_reg(uint8_t reg, uint8_t val)
 {
@@ -255,6 +266,46 @@ static int vcnl3020_service_interrupt(uint16_t *out_proximity)
     return 0;
 }
 
+/* On-demand plain read of the latest self-timed result for the pin-22
+ * BMPS-wake path (see vcnl3020_test_bmps_wake_poll()) - does NOT touch the
+ * Interrupt Status Register at all, so it's harmless to call regardless of
+ * whether a real GPIO3 interrupt is also pending; that will still be
+ * serviced normally by vcnl3020_service_interrupt() whenever/if it arrives.
+ * One reopen-and-retry on failure, same reasoning as
+ * vcnl3020_service_interrupt() above. */
+static int vcnl3020_read_result(uint16_t *out_proximity)
+{
+    if (vcnl3020_read_result_once(out_proximity) == 0)
+        return 0;
+
+    if (vcnl3020_i2c_reopen() != 0)
+        return -1;
+
+    return vcnl3020_read_result_once(out_proximity);
+}
+
+/* Called (via VCNL3020_BMPS_WAKE_POLL_BIT) from wifi_mqtt.c's
+ * bmps_wake_probe_cb() - registered against a real qapi_bmps_sleep_wakeup_cb()
+ * PWR_EVT_WMAC_POST_AWAKE event. Confirmed on hardware (2026-08-17) that
+ * physically wiring the VCNL3020's /INT to chip pin 22
+ * (EXT_WAKEUP_INTR_N, armed automatically at boot via
+ * init_aon_ext_wakeup_int() - FIRMWARE_APPS_INFORMED_WAKE is unconditionally
+ * defined for this chip) makes a real touch/release force BMPS to exit with
+ * a distinct reason (qapi_bmps_get_exit_reason() == 7, i.e.
+ * EXIT_REASON_EXT_INT, not the reason=2 of a normal DTIM wake) - see
+ * aon_a2f_assert_isr_handler() in wifi_fw_ext_intr.c, specifically its
+ * SUPPORT_SWTMR_TO_WKUP_FROM_BMPS branch (also unconditionally defined for
+ * this chip) which calls nt_bmps_wakeup_callback(EXIT_REASON_EXT_INT)
+ * whenever pin 22 asserts while genuinely in BMPS "Sleep". This is a plain
+ * xTaskNotify(), safe to call from any task context (this is NOT the raw
+ * GPIO ISR - vcnl3020_gpio_isr()'s "no I2C, no printf" restriction does not
+ * apply here). */
+void vcnl3020_test_bmps_wake_poll(void)
+{
+    if (s_task_handle != NULL)
+        xTaskNotify(s_task_handle, VCNL3020_BMPS_WAKE_POLL_BIT, eSetBits);
+}
+
 /* Runs in GPIO interrupt-controller context - bare minimum only (no I2C,
  * no printf).
  *
@@ -346,8 +397,6 @@ static int vcnl3020_configure(void)
 
 static void vcnl3020_test_task(void *arg)
 {
-    uint8_t last_state = 0xFFU; /* neither OPEN(0) nor CLOSED(1) - forces the first real transition to print */
-
     (void)arg;
 
     /* s_task_handle must be valid before qapi_GPIO_Enable_Interrupt() runs
@@ -383,30 +432,50 @@ static void vcnl3020_test_task(void *arg)
      * specific board (a separate, unconfirmed possibility - the "3 tests"
      * that motivated the removed poll ran at a much noisier 2s/5s poll
      * cadence than reproduced), that would show up as touches with no
-     * "GPIO3 notified" line at all with this build. */
+     * "GPIO3 notified" line at all with this build.
+     *
+     * ALSO waits on VCNL3020_BMPS_WAKE_POLL_BIT (added 2026-08-17, no
+     * separate timer involved) - see vcnl3020_test_bmps_wake_poll()'s
+     * comment: a real GPIO3-line edge now also reaches this task via chip
+     * pin 22 (EXT_WAKEUP_INTR_N) even while BMPS is asleep, confirmed on
+     * hardware (qapi_bmps_get_exit_reason() == 7 / EXIT_REASON_EXT_INT on a
+     * real touch). No forced/independent poll timer anywhere in this file -
+     * both notify bits are genuinely event-driven. */
     for (;;) {
         uint32_t notified;
         uint16_t proximity;
 
-        xTaskNotifyWait(0, VCNL3020_NOTIFY_BIT, &notified, portMAX_DELAY);
+        xTaskNotifyWait(0, VCNL3020_NOTIFY_BIT | VCNL3020_BMPS_WAKE_POLL_BIT, &notified, portMAX_DELAY);
 
-        /* Real GPIO3 edge - read + clear the Interrupt Status Register
-         * (releases /INT) and read the fresh proximity result, retrying
-         * once via an I2C reopen on failure. */
-        info_printf("GPIO3 notified\n");
+        if (notified & VCNL3020_NOTIFY_BIT) {
+            /* Real GPIO3 edge - read + clear the Interrupt Status Register
+             * (releases /INT) and read the fresh proximity result, retrying
+             * once via an I2C reopen on failure. */
+            info_printf("GPIO3 notified\n");
 
-        if (vcnl3020_service_interrupt(&proximity) != 0) {
-            info_printf("interrupt service failed (I2C), will retry\n");
-            continue;
+            if (vcnl3020_service_interrupt(&proximity) != 0) {
+                info_printf("interrupt service failed (I2C), will retry\n");
+                continue;
+            }
+        } else {
+            /* pin-22 (EXT_WAKEUP_INTR_N) BMPS wake - plain on-demand read,
+             * does NOT touch the Interrupt Status Register (see
+             * vcnl3020_read_result()). */
+            info_printf("pin22 BMPS wake, checking sensor\n");
+
+            if (vcnl3020_read_result(&proximity) != 0) {
+                info_printf("pin22-wake read failed (I2C), will retry next wake\n");
+                continue;
+            }
         }
 
         {
             uint8_t state = (proximity >= HIGH_THRESHOLD) ? 1U : 0U;
 
-            if (state != last_state) {
-                last_state = state;
-                info_printf("STATUS: %s (raw=%u, via GPIO3)\n", state ? "CLOSED" : "OPEN",
-                    (unsigned)proximity);
+            if (state != s_last_state) {
+                s_last_state = state;
+                info_printf("STATUS: %s (raw=%u, via %s)\n", state ? "CLOSED" : "OPEN",
+                    (unsigned)proximity, (notified & VCNL3020_NOTIFY_BIT) ? "GPIO3" : "pin22");
                 /* Non-blocking - hands off to wifi_mqtt.c's own task, see
                  * vcnl3020_mqtt_publish_status()'s header comment. Queued
                  * even before WLAN/MQTT come up; safe to call unconditionally. */

@@ -56,7 +56,24 @@
  *   - If WLAN or MQTT ever drops, dtim10_bmps_disable() runs BEFORE any
  *     reconnect attempt, and BMPS only re-engages once a fresh WLAN
  *     association has again been up for VCNL3020_BMPS_ENTER_DELAY_MS - the
- *     same rule as the initial connect, not a special case. */
+ *     same rule as the initial connect, not a special case.
+ *
+ * Pin-22 (EXT_WAKEUP_INTR_N) interrupt wake during BMPS (added 2026-08-17,
+ * see bmps_wake_probe_cb()): the VCNL3020's /INT is physically wired to
+ * chip pin 22 in addition to GPIO3. init_aon_ext_wakeup_int() arms that pin
+ * automatically at boot (FIRMWARE_APPS_INFORMED_WAKE is unconditionally
+ * defined for this chip - see build/freertos/common/application_code/
+ * main.c), and its ISR has a dedicated BMPS-wake path
+ * (SUPPORT_SWTMR_TO_WKUP_FROM_BMPS in wifi_fw_ext_intr.c, also
+ * unconditionally defined here) that calls
+ * nt_bmps_wakeup_callback(EXIT_REASON_EXT_INT) whenever pin 22 asserts
+ * while genuinely in BMPS "Sleep". Confirmed on hardware: a real touch now
+ * produces qapi_bmps_get_exit_reason() == 7, not the reason=2 of an
+ * ordinary DTIM wake - i.e. a real GPIO edge now forces its own BMPS exit,
+ * independent of the natural DTIM cadence. No independent poll timer
+ * anywhere in this file - bmps_wake_probe_cb()'s PWR_EVT_WMAC_POST_AWAKE
+ * handler is the only trigger, and it only ever rides a wake the WLAN
+ * firmware was already doing on its own (DTIM timer or pin 22). */
 
 #include <string.h>
 #include <stdint.h>
@@ -87,6 +104,11 @@
 #include "wmi_api.h"
 
 #include "wifi_mqtt.h"
+
+/* vcnl3020_test.c - piggyback target for bmps_wake_probe_cb() below. No
+ * dedicated header in this project (see vcnl3020_test_start()'s own extern
+ * in vcnl3020_test_demo_main.c), so declared the same way here. */
+extern void vcnl3020_test_bmps_wake_poll(void);
 
 #ifndef DEV_STA_ID
 #define DEV_STA_ID 1
@@ -301,6 +323,38 @@ static void dtim10_bmps_disable(void)
     info_printf("DTIM10/BMPS disengaged (reconnecting)\n");
 }
 
+/* Pin-22 (EXT_WAKEUP_INTR_N) BMPS-wake piggyback (2026-08-17) - qapi_bmps_
+ * sleep_wakeup_cb() (drivers/lowpower/qapi_lowpower.c) registers this
+ * against PWR_EVT_WMAC_PRE_SLEEP / PWR_EVT_WMAC_POST_AWAKE /
+ * PWR_EVT_WMAC_SLEEP_ABORT (wifi_fw_pwr_cb_infra.h) - real WMAC power
+ * events, not a timer this file invented. Originally added to measure the
+ * chip's own natural DTIM wake cadence; now doubles as the actual trigger
+ * now that the VCNL3020's /INT is physically wired to chip pin 22 as well
+ * as GPIO3. Confirmed on hardware: a real touch/release now makes BMPS
+ * exit via qapi_bmps_get_exit_reason() == 7 (EXIT_REASON_EXT_INT, see
+ * aon_a2f_assert_isr_handler()'s SUPPORT_SWTMR_TO_WKUP_FROM_BMPS branch in
+ * wifi_fw_ext_intr.c), not just the natural DTIM-timer wake (reason 2) - so
+ * POST_AWAKE now fires promptly on a real event instead of only every
+ * ~30-45s. No independent poll timer anywhere in this file - every trigger
+ * here rides a wake the WLAN firmware was already doing on its own. */
+static void bmps_wake_probe_cb(uint8_t evt, const void *p_args)
+{
+    const char *name = "?";
+
+    (void)p_args;
+
+    if (evt & PWR_EVT_WMAC_PRE_SLEEP) {
+        name = "PRE_SLEEP";
+    } else if (evt & PWR_EVT_WMAC_POST_AWAKE) {
+        name = "POST_AWAKE";
+        vcnl3020_test_bmps_wake_poll();
+    } else if (evt & PWR_EVT_WMAC_SLEEP_ABORT) {
+        name = "SLEEP_ABORT";
+    }
+
+    info_printf("bmps_wake: %s at %lu ms\n", name, (unsigned long)hres_timer_curr_time_ms());
+}
+
 static qapi_Status_t wlan_start_dhcp(void)
 {
     struct netif *netif;
@@ -472,6 +526,11 @@ static void wifi_mqtt_task(void *arg)
         info_printf("cannot continue without WLAN enabled\n");
         vTaskDelete(NULL);
     }
+
+    /* Registered once, for the task's whole lifetime - see
+     * bmps_wake_probe_cb()'s comment. Harmless to register before BMPS
+     * ever engages; it simply won't fire until it does. */
+    qapi_bmps_sleep_wakeup_cb(bmps_wake_probe_cb, 1);
 
     /* Outer loop = one full (re)connect cycle: WLAN association, then DHCP
      * (only if not already bound), then MQTT connect. Re-entered from the

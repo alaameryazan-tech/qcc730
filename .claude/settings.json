@@ -24,7 +24,16 @@
       "WebFetch(domain:www.vishay.com)",
       "Bash(find \"/c/Users/eurot/.claude/projects/c--qcc7030-qcc7030sdk-qccsdk/f6760c64-29ec-4a19-8890-54bc81f94539/tool-results\" -iname \"*.pdf\" 2>/dev/null)",
       "Read(//c/Users/eurot/.claude/projects/c--qcc7030-qcc7030sdk-qccsdk/f6760c64-29ec-4a19-8890-54bc81f94539/tool-results/**)",
-      "Bash(grep -iv \"sys_src\\\\\\\\\\\\\\\\nt_pdc_driver.c\\\\|nt_pdc_driver.h\")"
+      "Bash(grep -iv \"sys_src\\\\\\\\\\\\\\\\nt_pdc_driver.c\\\\|nt_pdc_driver.h\")",
+      "Bash(gh auth *)",
+      "PowerShell(gh auth status 2>&1)",
+      "PowerShell(gh --version 2>&1)",
+      "Bash(git ls-tree *)",
+      "Bash(mount)",
+      "Bash(ls /c)",
+      "Bash(ls /cygdrive)",
+      "Read(//c//**)",
+      "Bash(python -c \"import json; d=json.load\\(open\\('tools/qccide/qccIdeProjConfig.json'\\)\\); print\\('entries:', len\\(d\\)\\); print\\([e.get\\('prjName'\\) for e in d]\\); print\\('activated:', [\\(e.get\\('prjName'\\), e.get\\('activated'\\)\\) for e in d]\\)\")"
     ]
   }
 }

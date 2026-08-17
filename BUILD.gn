@@ -106,6 +106,7 @@ projects_common = [
     "//demo/ambient_power_demo",
     "//modules/supplicant",
     "//demo/vcnl3020_test_demo",
+    "//demo/sht40_sensor",
 ]
 
 if (!CONFIG_WPS_LIB) {

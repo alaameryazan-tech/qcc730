@@ -1,0 +1,67 @@
+# Copyright (c) 2024 Qualcomm Innovation Center, Inc. All rights reserved.
+#SPDX-License-Identifier: BSD-3-Clause-Clear
+#
+
+import("//configs_decl.gni")
+
+
+
+sht40_sensor_inc = [
+
+    "src",
+
+    "//drivers/wlan/",
+
+    "//drivers/net/",
+
+    "//demo/common/net/src/",
+
+    "//demo/common/wlan/"
+
+]
+
+
+
+sht40_sensor_src = [
+
+    "src/powertest_demo.c",
+
+    "src/powertest_demo_main.c",
+
+    "src/mqtt_printf_task.c",
+
+]
+
+
+
+
+
+
+not_needed("*", [ ])
+
+
+
+config("_config") {
+
+    if (image_name == "FERMION_SHT40_SENSOR_DEMO") {
+
+        include_dirs = sht40_sensor_inc
+
+    }
+
+}
+
+
+
+source_set("sht40_sensor") {
+
+    if (image_name == "FERMION_SHT40_SENSOR_DEMO") {
+
+        sources = sht40_sensor_src
+
+    }
+
+}
+
+
+

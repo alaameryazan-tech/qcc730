@@ -6,7 +6,7 @@
 /* VCNL3020 bring-up test - entry point.
  *
  * See vcnl3020_test.c for the actual sensor logic (interrupt-driven on
- * GPIO3 - see that file's top comment for the wiring and how to read the
+ * PIN 22 (EXIT_on_wakeup) - see that file's top comment for the wiring and how to read the
  * STATUS lines) and wifi_mqtt.c for the WLAN+MQTT publisher (same broker/
  * WLAN config as demo/powertest_demo) that reports every STATUS
  * transition. This file only wires app_init()/app_main() per this SDK's

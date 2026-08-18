@@ -110,7 +110,24 @@ extern uint32_t hres_timer_curr_time_ms(void);
 /* Interrupt Control Register (0x89) bits/fields. */
 #define VCNL3020_ICR_THRES_EN_BIT      (1U << 1)  /* write 1: enable threshold-crossing interrupt generation */
 #define VCNL3020_ICR_COUNT_EXCEED_SHIFT 5U         /* bits 7:5: consecutive out-of-window samples before /INT asserts */
-#define VCNL3020_INT_COUNT_EXCEED      1U          /* raw field value 1 -> 2 consecutive samples (hardware debounce) */
+/* raw field value -> consecutive out-of-window samples before /INT asserts:
+ * value N -> 2^N samples at VCNL3020_PROX_RATE_SELECT's rate (1.95/s here),
+ * so value 2 -> 4 samples -> ~2.05s. Raised 1->2 (2026-08-18) after hardware
+ * logs showed a single slow hand withdrawal forcing THREE separate pin-22
+ * BMPS wakes ~1-2s apart (935ms/1415ms/1954ms gaps - each matching the old
+ * value-1 = 2-sample = ~1.03s debounce) before the release finally
+ * registered - because LOW_THRESHOLD is pinned to 0 (unreachable, see this
+ * file's top comment), the comparator can only ever re-arm on the HIGH side,
+ * so a value hovering in/out of the debounce window near HIGH_THRESHOLD
+ * re-triggers /INT - and therefore a real forced radio wake via pin 22 -
+ * every time, even though OPEN/CLOSED never actually changed in between.
+ * Doubling the debounce window cuts that chatter roughly in half at the
+ * cost of ~1s more worst-case release latency (touch/CLOSED detection is
+ * unaffected in practice - a real touch jumps straight from ~2150 to
+ * 4857+, clearing 4 consecutive samples immediately either way). Raise
+ * further (3 -> 8 samples -> ~4.1s) if hardware logs still show multi-wake
+ * chatter after this change. */
+#define VCNL3020_INT_COUNT_EXCEED      2U
 
 /* Interrupt Status Register (0x8E) bits - read+cleared to release /INT. */
 #define VCNL3020_ISR_TH_HI_BIT         (1U << 0)

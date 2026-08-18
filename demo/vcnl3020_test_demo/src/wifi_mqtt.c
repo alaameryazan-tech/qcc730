@@ -85,6 +85,7 @@
 #include <string.h>
 #include <stdint.h>
 #include <stdio.h>
+#include <errno.h>
 
 #include "FreeRTOS.h"
 #include "task.h"
@@ -176,21 +177,27 @@ extern void vcnl3020_test_poll_now(void);
  * without needing a separate roaming timer. */
 #define VCNL3020_WLAN_CONNECT_WAIT_MS       15000U
 
-/* Listen interval = 1500 TU = 15 x 100 TU (default AP beacon interval),
- * i.e. wake every 15th beacon instead of every one. Raised from DTIM10
- * (1000 TU, same value demo/powertest_demo and demo/ambient_power_demo use)
- * on 2026-08-17 - now that pin 22 forces its own BMPS exit independent of
- * the natural DTIM schedule (see bmps_wake_probe_cb()), the DTIM interval
- * no longer affects touch-detection latency at all, only background beacon
- * housekeeping cost - so it's safe to extend as long as this AP tolerates
- * it. Test incrementally if raising further: a too-long interval risks
- * missed broadcast traffic or the AP dropping the association (same class
- * of AP-compatibility issue as the earlier BMPS_IDLE_TIMEOUT_MS
- * beacon-miss storm - see that macro's comment). Set before every
- * qapi_WLAN_Commit(), see wlan_associate(). NOTE: still named "DTIM10" in
- * some older comments/console strings elsewhere in this file - cosmetic
- * only, not re-swept for this experimental change. */
-#define VCNL3020_DTIM10_LISTEN_INTERVAL_TU  1500U
+/* Listen interval = 1000 TU = 10 x 100 TU (default AP beacon interval),
+ * i.e. wake every 10th beacon - DTIM10, same value demo/powertest_demo and
+ * demo/ambient_power_demo use. Reverted from 1500 (DTIM15, "wake every
+ * 15th beacon") on 2026-08-18 - hardware logs at 1500 showed a real,
+ * frequent beacon-miss problem: run_bmiss hit its 10-consecutive-miss
+ * threshold (exit_reason=1, EXIT_REASON_BEACON_MISS) roughly every
+ * 100-150s, and about 1 in 3 of those escalated into a full WLAN
+ * disconnect+reconnect (6x consecutive Null-Tx failures -> MLME halt ->
+ * fresh WPA 4-way handshake, ~7-9s each at full power, confirmed via the
+ * "WiFi disconnected"/"WiFi connected" bracket in wlan_event_cb()). That
+ * recurring cost (~7-9s full power roughly every 5 min, each ALSO
+ * re-arming the full VCNL3020_BMPS_ENTER_DELAY_MS 15s-full-power window
+ * afterward) was plausibly erasing most or all of the steady-state power
+ * saving the longer interval was meant to buy - this AP does not tolerate
+ * DTIM15 well. Pin 22 still forces its own BMPS exit independent of the
+ * natural DTIM schedule regardless of this value (see
+ * bmps_wake_probe_cb()), so touch-detection latency is unaffected either
+ * way - this only trades background beacon-housekeeping frequency against
+ * beacon-miss/disconnect risk, and DTIM15 lost that trade on this AP. Set
+ * before every qapi_WLAN_Commit(), see wlan_associate(). */
+#define VCNL3020_DTIM10_LISTEN_INTERVAL_TU  1000U
 /* BMPS idle-timeout passed to qapi_bmps_cfg() once BMPS engages. Was 50 -
  * ambient_power_demo.c's tuned value - but on hardware here (2026-08-14)
  * that value showed a real beacon-miss/reconnect storm right after BMPS
@@ -585,6 +592,7 @@ static int mqtt_publish_status(uint8_t is_closed)
     MQTTPublishInfo_t pub;
     uint32_t t0, t1;
     MQTTStatus_t st;
+    int saved_errno;
 
     memset(&pub, 0, sizeof(pub));
     pub.qos = MQTTQoS0;
@@ -602,16 +610,38 @@ static int mqtt_publish_status(uint8_t is_closed)
      * log to see if the WMAC was actually awake+idle at this same
      * timestamp). If this delta itself is huge, MQTT_Publish()/the
      * transport send is blocking internally - different bug. */
+    /* errno capture (2026-08-18): grabbed IMMEDIATELY after MQTT_Publish()
+     * returns, before any other call (hres_timer_curr_time_ms() included) has
+     * a chance to touch it - this whole call chain is synchronous, single-
+     * task (wifi_mqtt_task -> mqtt_publish_status -> MQTT_Publish ->
+     * sendBuffer() -> transport.send == Plaintext_Send), so if the transport
+     * send failed, this is still that failure's own errno.
+     *
+     * Added to root-cause a real MQTTSendFailed seen on hardware
+     * (2026-08-17 log) that returned in ~0ms - too fast to be
+     * MQTT_SEND_TIMEOUT_MS (20000ms default, comp/mqtt/source/include/
+     * core_mqtt_config_defaults.h) exhausting on a merely-not-writable-yet
+     * socket; that leaves only an immediate hard error from select()/send()
+     * inside Plaintext_Send (modules/net/mqtt_client/mqtt_platform/
+     * plaintext_posix.c) - which already calls logTransportError(errno) on
+     * that exact path, but nothing from it showed up on the console, so
+     * capture it here too rather than depend on that shared library file's
+     * own logging config. */
     t0 = hres_timer_curr_time_ms();
     st = MQTT_Publish(&s_mqtt_ctx, &pub, 0);
+    saved_errno = errno;
     t1 = hres_timer_curr_time_ms();
+
+    if (st != MQTTSuccess) {
+        info_printf("MQTT_Publish(%s) took %lu ms (t0=%lu t1=%lu), bmps=%s, status=%s, errno=%d (%s)\n",
+            (const char *)pub.pPayload, (unsigned long)(t1 - t0), (unsigned long)t0, (unsigned long)t1,
+            s_bmps_active ? "on" : "off", MQTT_Status_strerror(st), saved_errno, strerror(saved_errno));
+        return -1;
+    }
 
     info_printf("MQTT_Publish(%s) took %lu ms (t0=%lu t1=%lu), bmps=%s, status=%s\n",
         (const char *)pub.pPayload, (unsigned long)(t1 - t0), (unsigned long)t0, (unsigned long)t1,
         s_bmps_active ? "on" : "off", MQTT_Status_strerror(st));
-
-    if (st != MQTTSuccess)
-        return -1;
 
     info_printf("published %s to %s\n", (const char *)pub.pPayload, MQTT_TOPIC_PUB);
     return 0;

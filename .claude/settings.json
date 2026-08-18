@@ -33,7 +33,8 @@
       "Bash(ls /c)",
       "Bash(ls /cygdrive)",
       "Read(//c//**)",
-      "Bash(python -c \"import json; d=json.load\\(open\\('tools/qccide/qccIdeProjConfig.json'\\)\\); print\\('entries:', len\\(d\\)\\); print\\([e.get\\('prjName'\\) for e in d]\\); print\\('activated:', [\\(e.get\\('prjName'\\), e.get\\('activated'\\)\\) for e in d]\\)\")"
+      "Bash(python -c \"import json; d=json.load\\(open\\('tools/qccide/qccIdeProjConfig.json'\\)\\); print\\('entries:', len\\(d\\)\\); print\\([e.get\\('prjName'\\) for e in d]\\); print\\('activated:', [\\(e.get\\('prjName'\\), e.get\\('activated'\\)\\) for e in d]\\)\")",
+      "Bash(find /c/qcc7030/qcc7030sdk -iname \"logging_stack.h\" 2>/dev/null | grep -v output | grep -v /build/ *)"
     ]
   }
 }

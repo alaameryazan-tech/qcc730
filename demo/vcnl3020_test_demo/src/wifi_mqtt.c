@@ -210,8 +210,15 @@ extern void vcnl3020_test_poll_now(void);
 
 /* Master log switch - off by default to save the UART/CPU-active time
  * every printf() costs. Flip to 1 to get every line back for debugging -
- * no call sites change either way. */
-#define VCNL3020_MQTT_LOG_ENABLE       0
+ * no call sites change either way.
+ *
+ * TEMP DEBUG (2026-08-17): flipped on to chase the "publishes locally but
+ * MQTTX doesn't see it for ~2 minutes" report - confirmed the sensor/I2C/
+ * pin-22 path is NOT the culprit (STATUS line + power spike are both
+ * immediate on touch), so this instruments the WMAC/BMPS side instead: see
+ * bmps_wake_probe_cb()'s exit-reason log and mqtt_publish_status()'s
+ * before/after MQTT_Publish() timing below. Revert to 0 once resolved. */
+#define VCNL3020_MQTT_LOG_ENABLE       1
 
 #if VCNL3020_MQTT_LOG_ENABLE
 #define info_printf(msg, ...) printf("VCNL3020_MQTT: " msg, ##__VA_ARGS__)
@@ -424,7 +431,24 @@ static void bmps_wake_probe_cb(uint8_t evt, const void *p_args)
         name = "SLEEP_ABORT";
     }
 
-    info_printf("bmps_wake: %s at %lu ms\n", name, (unsigned long)hres_timer_curr_time_ms());
+    /* TEMP DEBUG (2026-08-17): logs EVERY WMAC sleep/wake transition with
+     * a timestamp - used to see whether the radio is actually cycling on
+     * its normal DTIM/listen-interval cadence throughout a stall (proving
+     * the radio itself just isn't waking for ~2 min, e.g. a listen-
+     * interval/AP negotiation problem) or whether POST_AWAKE keeps firing
+     * on schedule while the publish still doesn't reach the broker
+     * (pointing at a TX-queue/BMPS-flush problem instead). exit_reason==7
+     * is EXIT_REASON_EXT_INT (pin 22 - see wifi_fw_ext_intr.c), reason==2
+     * is the ordinary DTIM wake - see this file's top comment. */
+    if (evt & PWR_EVT_WMAC_POST_AWAKE) {
+        uint8_t exit_reason = 0xFFU;
+
+        qapi_bmps_get_exit_reason(&exit_reason);
+        info_printf("bmps_wake: %s at %lu ms, exit_reason=%u\n",
+            name, (unsigned long)hres_timer_curr_time_ms(), (unsigned)exit_reason);
+    } else {
+        info_printf("bmps_wake: %s at %lu ms\n", name, (unsigned long)hres_timer_curr_time_ms());
+    }
 }
 
 static qapi_Status_t wlan_start_dhcp(void)
@@ -559,6 +583,8 @@ static int mqtt_connect(void)
 static int mqtt_publish_status(uint8_t is_closed)
 {
     MQTTPublishInfo_t pub;
+    uint32_t t0, t1;
+    MQTTStatus_t st;
 
     memset(&pub, 0, sizeof(pub));
     pub.qos = MQTTQoS0;
@@ -567,7 +593,24 @@ static int mqtt_publish_status(uint8_t is_closed)
     pub.pPayload = is_closed ? "CLOSED" : "OPEN";
     pub.payloadLength = is_closed ? (sizeof("CLOSED") - 1) : (sizeof("OPEN") - 1);
 
-    if (MQTT_Publish(&s_mqtt_ctx, &pub, 0) != MQTTSuccess)
+    /* TEMP DEBUG (2026-08-17): t0/t1 around the actual MQTT_Publish() call
+     * (which does the blocking transport send under the hood) - if this
+     * delta is small (ms range) every time, the local publish is NOT what's
+     * taking ~2 min, and the delay is happening after this function returns
+     * (i.e. the frame is queued/sent locally but not actually leaving the
+     * radio promptly - correlate against bmps_wake_probe_cb()'s exit_reason
+     * log to see if the WMAC was actually awake+idle at this same
+     * timestamp). If this delta itself is huge, MQTT_Publish()/the
+     * transport send is blocking internally - different bug. */
+    t0 = hres_timer_curr_time_ms();
+    st = MQTT_Publish(&s_mqtt_ctx, &pub, 0);
+    t1 = hres_timer_curr_time_ms();
+
+    info_printf("MQTT_Publish(%s) took %lu ms (t0=%lu t1=%lu), bmps=%s, status=%s\n",
+        (const char *)pub.pPayload, (unsigned long)(t1 - t0), (unsigned long)t0, (unsigned long)t1,
+        s_bmps_active ? "on" : "off", MQTT_Status_strerror(st));
+
+    if (st != MQTTSuccess)
         return -1;
 
     info_printf("published %s to %s\n", (const char *)pub.pPayload, MQTT_TOPIC_PUB);
@@ -697,6 +740,12 @@ static void wifi_mqtt_task(void *arg)
             }
 
             if (xQueueReceive(s_publish_queue, &is_closed, pdMS_TO_TICKS(wait_ms)) == pdTRUE) {
+                /* TEMP DEBUG (2026-08-17): timestamp the moment this task
+                 * actually dequeues the event, to separate "sensor task ->
+                 * queue -> this task" handoff latency from whatever
+                 * mqtt_publish_status()/MQTT_Publish() itself measures. */
+                info_printf("dequeued %s from publish queue at %lu ms\n",
+                    is_closed ? "CLOSED" : "OPEN", (unsigned long)hres_timer_curr_time_ms());
                 s_last_status = is_closed;
                 if (mqtt_publish_status(is_closed) != 0) {
                     info_printf("publish failed, reconnecting\n");
@@ -741,6 +790,14 @@ static void wifi_mqtt_task(void *arg)
 
 void vcnl3020_mqtt_publish_status(uint8_t is_closed)
 {
+    /* TEMP DEBUG (2026-08-17): timestamp the moment the sensor task hands
+     * this event off - the other end of the pipeline from the "dequeued
+     * ..." log in wifi_mqtt_task()'s steady-state loop. A big gap between
+     * this and that log would point at the mqtt task itself being stuck
+     * elsewhere (e.g. mid MQTT_ProcessLoop()/reconnect) rather than at the
+     * radio/TX side. */
+    info_printf("enqueue %s at %lu ms\n", is_closed ? "CLOSED" : "OPEN", (unsigned long)hres_timer_curr_time_ms());
+
     if (s_publish_queue == NULL)
         return; /* vcnl3020_mqtt_start() not called yet - drop, nothing to hand this off to */
 

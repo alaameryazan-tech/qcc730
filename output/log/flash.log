@@ -1,9 +1,9 @@
-2026-08-17 16:23:22 DEBUG [2026-08-17 16:23:22] flash.py Started. 
-2026-08-17 16:23:22 INFO C:\qcc7030\qcc7030sdk\qccsdk\output\mqm730i\FERMION_NVM_PROGRAMMER\DEBUG\bin\FERMION_NVM_PROGRAMMER.elf
-2026-08-17 16:23:22 INFO cd C:\qcc7030\qcc7030sdk\qccsdk\tools/nvm_programmer/scripts
-2026-08-17 16:23:22 DEBUG Execute cmd as below with check=True enable=True logEnable=True logBlockMode=True waitFinish=True:
-2026-08-17 16:23:22 INFO python   nvm_programmer.py -s ch347  -f C:\qcc7030\qcc7030sdk\qccsdk\output\mqm730i\FERMION_SHT40_SENSOR_DEMO\DEBUG\bin\FERMION_SHT40_SENSOR_DEMO_HASHED.elf -i C:\qcc7030\qcc7030sdk\qccsdk\output\mqm730i\FERMION_NVM_PROGRAMMER\DEBUG\bin\FERMION_NVM_PROGRAMMER.elf -P -A 
-2026-08-17 16:23:22 INFO +++++++++++++++++++++++++++++++++++++++++++
+2026-08-18 08:22:43 DEBUG [2026-08-18 08:22:43] flash.py Started. 
+2026-08-18 08:22:43 INFO C:\qcc7030\qcc7030sdk\qccsdk\output\mqm730i\FERMION_NVM_PROGRAMMER\DEBUG\bin\FERMION_NVM_PROGRAMMER.elf
+2026-08-18 08:22:43 INFO cd C:\qcc7030\qcc7030sdk\qccsdk\tools/nvm_programmer/scripts
+2026-08-18 08:22:43 DEBUG Execute cmd as below with check=True enable=True logEnable=True logBlockMode=True waitFinish=True:
+2026-08-18 08:22:43 INFO python   nvm_programmer.py -s ch347  -f C:\qcc7030\qcc7030sdk\qccsdk\output\mqm730i\FERMION_VCNL3020_TEST_DEMO\DEBUG\bin\FERMION_VCNL3020_TEST_DEMO_HASHED.elf -i C:\qcc7030\qcc7030sdk\qccsdk\output\mqm730i\FERMION_NVM_PROGRAMMER\DEBUG\bin\FERMION_NVM_PROGRAMMER.elf -P -A 
+2026-08-18 08:22:43 INFO +++++++++++++++++++++++++++++++++++++++++++
 waitFinish=True
 run
 Open On-Chip Debugger 0.12.0+dev (2026-03-17-12:08)
@@ -38,8 +38,8 @@ Info : Listening on port 4444 for telnet connections
 Info : accepting 'gdb' connection on tcp/3333
 warning: No executable has been specified and target does not support
 determining executable automatically.  Try using the "file" command.
-[2026-08-17 16:23:27,854] INFO: Checking for files to add to the image for Firmware Descriptor Table 0 File:gen_fwd_table.py:649 Function:gen_xml_program 
-[2026-08-17 16:23:27,862] INFO: Done Generating XML file to program. File:gen_fwd_table.py:687 Function:gen_xml_program 
+[2026-08-18 08:22:52,498] INFO: Checking for files to add to the image for Firmware Descriptor Table 0 File:gen_fwd_table.py:649 Function:gen_xml_program 
+[2026-08-18 08:22:52,509] INFO: Done Generating XML file to program. File:gen_fwd_table.py:687 Function:gen_xml_program 
  Info: Generate partition table...
  Info: Generate FWD table...
  Info: Generate download table...
@@ -53,7 +53,7 @@ C:\Users\eurot\.qcc_ide\Sdks\1.0.0^qccsdk_qcc730\../../Tools\openocdForCh347\0.1
 ********************************************************************************
 Starting GDB Client...
 GDB tool port:   127.0.0.1:19383
-GDB client port: 127.0.0.1:58071
+GDB client port: 127.0.0.1:55616
 ********************************************************************************
 Initializing GDB...
 ********************************************************************************
@@ -61,44 +61,51 @@ Initializing GDB...
 Programming C:/qcc7030/qcc7030sdk/qccsdk/tools/storage/firmware_desc_table/curr_age_fdt/frn_curr_age_default.bin
 Programming 1024 bytes to rram 0x00208000
 .
-Image programmed successfully, time elapsed 0.38648223876953125 seconds.
+Image programmed successfully, time elapsed 0.250138521194458 seconds.
 Programming C:/qcc7030/qcc7030sdk/qccsdk/output/mqm730i/FERMION_SBL/DEBUG/bin/FERMION_SBL_HASHED.elf
 Programming 21824 bytes to rram 0x0020A400
-.
-Image programmed successfully, time elapsed 0.6974170207977295 seconds.
+.Warn : keep_alive() was not invoked in the 1000 ms timelimit. GDB alive packet not sent! (1126 ms). Workaround: increase "set remotetimeout" in GDB
+
+Image programmed successfully, time elapsed 1.526989221572876 seconds.
 Programming C:/qcc7030/qcc7030sdk/qccsdk/output/mqm730i/FERMION_SBL/DEBUG/bin/FERMION_SBL_HASHED.elf
 Programming 21824 bytes to rram 0x00212400
 .
-Image programmed successfully, time elapsed 0.6769425868988037 seconds.
+Image programmed successfully, time elapsed 1.8589470386505127 seconds.
 Programming C:/qcc7030/qcc7030sdk/qccsdk/tools/fw_upgrade/firmware_table.bin
 Programming 4096 bytes to flash 0x00000000
-.
-Image programmed successfully, time elapsed 0.34310150146484375 seconds.
-Programming C:/qcc7030/qcc7030sdk/qccsdk/output/mqm730i/FERMION_SHT40_SENSOR_DEMO/DEBUG/bin/FERMION_SHT40_SENSOR_DEMO_HASHED.elf
-Programming 956200 bytes to flash 0x00043000
-..............................Error: Error on socket 'GDB': WSAGetLastError==10054, message: Eine vorhandene Verbindung wurde vom Remotehost geschlossen.
+.Warn : keep_alive() was not invoked in the 1000 ms timelimit. GDB alive packet not sent! (1471 ms). Workaround: increase "set remotetimeout" in GDB
+
+Image programmed successfully, time elapsed 0.3718400001525879 seconds.
+Programming C:/qcc7030/qcc7030sdk/qccsdk/output/mqm730i/FERMION_VCNL3020_TEST_DEMO/DEBUG/bin/FERMION_VCNL3020_TEST_DEMO_HASHED.elf
+Programming 758064 bytes to flash 0x00043000
+.Warn : keep_alive() was not invoked in the 1000 ms timelimit. GDB alive packet not sent! (1250 ms). Workaround: increase "set remotetimeout" in GDB
+....Warn : keep_alive() was not invoked in the 1000 ms timelimit. GDB alive packet not sent! (1137 ms). Workaround: increase "set remotetimeout" in GDB
+Warn : keep_alive() was not invoked in the 1000 ms timelimit. GDB alive packet not sent! (1503 ms). Workaround: increase "set remotetimeout" in GDB
+.....Warn : keep_alive() was not invoked in the 1000 ms timelimit. GDB alive packet not sent! (1290 ms). Workaround: increase "set remotetimeout" in GDB
+.Warn : keep_alive() was not invoked in the 1000 ms timelimit. GDB alive packet not sent! (1060 ms). Workaround: increase "set remotetimeout" in GDB
+.............Error: Error on socket 'GDB': WSAGetLastError==10054, message: Eine vorhandene Verbindung wurde vom Remotehost geschlossen.
 .
 shutdown command invoked
 Error: [QCC730.cpu] Execution of event gdb-detach failed:
 
 Info : dropped 'gdb' connection
 
-Image programmed successfully, time elapsed 27.210957050323486 seconds.
+Image programmed successfully, time elapsed 37.339892864227295 seconds.
 Partial erasing flash 65536 bytes from 0x00003000, please wait for a moment ......
-Partial erase successfully, time elapsed 0.11058616638183594 seconds.
+Partial erase successfully, time elapsed 0.10702967643737793 seconds.
 Partial erasing flash 65536 bytes from 0x00013000, please wait for a moment ......
-Partial erase successfully, time elapsed 0.107177734375 seconds.
+Partial erase successfully, time elapsed 0.11355185508728027 seconds.
 Partial erasing flash 8192 bytes from 0x00001000, please wait for a moment ......
-Partial erase successfully, time elapsed 0.11252975463867188 seconds.
+Partial erase successfully, time elapsed 0.10807943344116211 seconds.
 Partial erasing flash 65536 bytes from 0x00023000, please wait for a moment ......
-Partial erase successfully, time elapsed 0.11472249031066895 seconds.
+Partial erase successfully, time elapsed 0.10850811004638672 seconds.
 Partial erasing flash 65536 bytes from 0x00033000, please wait for a moment ......
-Partial erase successfully, time elapsed 0.10533285140991211 seconds.
+Partial erase successfully, time elapsed 0.10810160636901855 seconds.
 
-2026-08-17 16:23:58 INFO -------------------------------------------
-2026-08-17 16:23:58 DEBUG Execute cmd as below with check=True enable=True logEnable=True logBlockMode=True waitFinish=True:
-2026-08-17 16:23:58 INFO python  nvm_programmer.py -s ch347  --reset -i C:\qcc7030\qcc7030sdk\qccsdk\output\mqm730i\FERMION_NVM_PROGRAMMER\DEBUG\bin\FERMION_NVM_PROGRAMMER.elf 
-2026-08-17 16:23:58 INFO +++++++++++++++++++++++++++++++++++++++++++
+2026-08-18 08:23:34 INFO -------------------------------------------
+2026-08-18 08:23:34 DEBUG Execute cmd as below with check=True enable=True logEnable=True logBlockMode=True waitFinish=True:
+2026-08-18 08:23:34 INFO python  nvm_programmer.py -s ch347  --reset -i C:\qcc7030\qcc7030sdk\qccsdk\output\mqm730i\FERMION_NVM_PROGRAMMER\DEBUG\bin\FERMION_NVM_PROGRAMMER.elf 
+2026-08-18 08:23:34 INFO +++++++++++++++++++++++++++++++++++++++++++
 waitFinish=True
 run
 Open On-Chip Debugger 0.12.0+dev (2026-03-17-12:08)
@@ -135,6 +142,7 @@ warning: No executable has been specified and target does not support
 determining executable automatically.  Try using the "file" command.
 Error: Error on socket 'GDB': WSAGetLastError==10054, message: Eine vorhandene Verbindung wurde vom Remotehost geschlossen.
 .
+Error: JTAG-DP STICKY ERROR
 shutdown command invoked
 Error: [QCC730.cpu] Execution of event gdb-detach failed:
 
@@ -148,13 +156,13 @@ C:\Users\eurot\.qcc_ide\Sdks\1.0.0^qccsdk_qcc730\../../Tools\openocdForCh347\0.1
 ********************************************************************************
 Starting GDB Client...
 GDB tool port:   127.0.0.1:19383
-GDB client port: 127.0.0.1:64708
+GDB client port: 127.0.0.1:57247
 ********************************************************************************
 Initializing GDB...
 ********************************************************************************
 ********************************************************************************
 Reset system.
 
-2026-08-17 16:24:02 INFO -------------------------------------------
-2026-08-17 16:24:02 INFO cd C:\qcc7030\qcc7030sdk\qccsdk\tools\qccsdkpy
-2026-08-17 16:24:02 DEBUG [2026-08-17 16:24:02] flash.py Succeeded. 
+2026-08-18 08:23:39 INFO -------------------------------------------
+2026-08-18 08:23:39 INFO cd C:\qcc7030\qcc7030sdk\qccsdk\tools\qccsdkpy
+2026-08-18 08:23:39 DEBUG [2026-08-18 08:23:39] flash.py Succeeded. 

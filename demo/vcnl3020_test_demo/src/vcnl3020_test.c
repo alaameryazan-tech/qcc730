@@ -81,6 +81,14 @@
 
 #include "wifi_mqtt.h"
 
+/* modules/hal/qcc730/qtmr/timer.h - not pulled in by this file's minimal
+ * include set, declared the same ad-hoc way vcnl3020_test_poll_now() is
+ * declared over in wifi_mqtt.c (no dedicated header). TEMP DEBUG
+ * (2026-08-17): only needed for the timestamp added to the STATUS log line
+ * below, to line up against wifi_mqtt.c's own timestamps while chasing the
+ * "~2 min before MQTTX sees it" report. */
+extern uint32_t hres_timer_curr_time_ms(void);
+
 #define VCNL3020_I2C_ADDR              0x13
 #define VCNL3020_I2C_INSTANCE          QAPI_I2C_INSTANCE_SE0_E
 
@@ -123,8 +131,13 @@
 
 /* Master log switch - off by default to save the UART/CPU-active time
  * every printf() costs. Flip to 1 to get every line back for debugging -
- * no call sites change either way. */
-#define VCNL3020_LOG_ENABLE            0
+ * no call sites change either way.
+ *
+ * TEMP DEBUG (2026-08-17): flipped on together with wifi_mqtt.c's own
+ * switch to chase the "publishes locally but MQTTX doesn't see it for ~2
+ * min" report - see wifi_mqtt.c's matching comment. Revert to 0 once
+ * resolved. */
+#define VCNL3020_LOG_ENABLE            1
 
 #if VCNL3020_LOG_ENABLE
 #define info_printf(msg, ...) printf("VCNL3020: " msg, ##__VA_ARGS__)
@@ -354,7 +367,8 @@ static void vcnl3020_test_task(void *arg)
 
             if (state != s_last_state) {
                 s_last_state = state;
-                info_printf("STATUS: %s (raw=%u)\n", state ? "CLOSED" : "OPEN", (unsigned)proximity);
+                info_printf("STATUS: %s (raw=%u) at %lu ms\n", state ? "CLOSED" : "OPEN",
+                    (unsigned)proximity, (unsigned long)hres_timer_curr_time_ms());
                 /* Non-blocking - hands off to wifi_mqtt.c's own task, see
                  * vcnl3020_mqtt_publish_status()'s header comment. Queued
                  * even before WLAN/MQTT come up; safe to call unconditionally. */

@@ -1,13 +1,13 @@
 <?xml version="1.0" ?>
 <?ignore
 This XML file was auto-generated:
-gen_part_table.py --output=C:\qcc7030\qcc7030sdk\qccsdk\tools\fw_upgrade\generated_partition_table.xml --begin=268KB --rank=1 --partition --id=APP --file=C:\qcc7030\qcc7030sdk\qccsdk\output\mqm730i\FERMION_SHT40_SENSOR_DEMO\DEBUG\bin\FERMION_SHT40_SENSOR_DEMO_HASHED.elf --partition --id=FS1 --start=12KB --size=64KB --partition --id=FS2 --start=76KB --size=64KB --partition --id=UNUSED --size=8KB --start=4KB --partition --id=99 --size=64KB --start=140KB --partition --id=101 --size=64KB --start=204KB
+gen_part_table.py --output=C:\qcc7030\qcc7030sdk\qccsdk\tools\fw_upgrade\generated_partition_table.xml --begin=268KB --rank=1 --partition --id=APP --file=C:\qcc7030\qcc7030sdk\qccsdk\output\mqm730i\FERMION_VCNL3020_TEST_DEMO\DEBUG\bin\FERMION_VCNL3020_TEST_DEMO_HASHED.elf --partition --id=FS1 --start=12KB --size=64KB --partition --id=FS2 --start=76KB --size=64KB --partition --id=UNUSED --size=8KB --start=4KB --partition --id=99 --size=64KB --start=140KB --partition --id=101 --size=64KB --start=204KB
 ?>
 <firmwaredescriptor>
    <instructions erase_block_size_bytes="4096" table_align_size_bytes="4096"/>
    <table>
       <header rank="1" signature="0x54445746" status="1" version="1"/>
-      <partition dirname="C:\qcc7030\qcc7030sdk\qccsdk\output\mqm730i\FERMION_SHT40_SENSOR_DEMO\DEBUG\bin" filename="FERMION_SHT40_SENSOR_DEMO_HASHED.elf" image_id="10" start_block="67" size_in_kb="934"/> <!--10-->
+      <partition dirname="C:\qcc7030\qcc7030sdk\qccsdk\output\mqm730i\FERMION_VCNL3020_TEST_DEMO\DEBUG\bin" filename="FERMION_VCNL3020_TEST_DEMO_HASHED.elf" image_id="10" start_block="67" size_in_kb="741"/> <!--10-->
       <partition filename="" image_id="5" start_block="3" size_in_kb="64"/> <!--Primary Filesystem-->
       <partition filename="" image_id="128" start_block="19" size_in_kb="64"/> <!--Secondary Filesystem-->
       <partition filename="" image_id="129" start_block="1" size_in_kb="8"/> <!--Unused-->

@@ -177,27 +177,38 @@ extern void vcnl3020_test_poll_now(void);
  * without needing a separate roaming timer. */
 #define VCNL3020_WLAN_CONNECT_WAIT_MS       15000U
 
-/* Listen interval = 1000 TU = 10 x 100 TU (default AP beacon interval),
- * i.e. wake every 10th beacon - DTIM10, same value demo/powertest_demo and
- * demo/ambient_power_demo use. Reverted from 1500 (DTIM15, "wake every
- * 15th beacon") on 2026-08-18 - hardware logs at 1500 showed a real,
- * frequent beacon-miss problem: run_bmiss hit its 10-consecutive-miss
- * threshold (exit_reason=1, EXIT_REASON_BEACON_MISS) roughly every
- * 100-150s, and about 1 in 3 of those escalated into a full WLAN
- * disconnect+reconnect (6x consecutive Null-Tx failures -> MLME halt ->
- * fresh WPA 4-way handshake, ~7-9s each at full power, confirmed via the
- * "WiFi disconnected"/"WiFi connected" bracket in wlan_event_cb()). That
- * recurring cost (~7-9s full power roughly every 5 min, each ALSO
- * re-arming the full VCNL3020_BMPS_ENTER_DELAY_MS 15s-full-power window
- * afterward) was plausibly erasing most or all of the steady-state power
- * saving the longer interval was meant to buy - this AP does not tolerate
- * DTIM15 well. Pin 22 still forces its own BMPS exit independent of the
- * natural DTIM schedule regardless of this value (see
- * bmps_wake_probe_cb()), so touch-detection latency is unaffected either
- * way - this only trades background beacon-housekeeping frequency against
- * beacon-miss/disconnect risk, and DTIM15 lost that trade on this AP. Set
- * before every qapi_WLAN_Commit(), see wlan_associate(). */
-#define VCNL3020_DTIM10_LISTEN_INTERVAL_TU  1000U
+/* Listen interval = 1300 TU = 13 x 100 TU (default AP beacon interval),
+ * i.e. wake every 13th beacon - "DTIM13", TESTING (2026-08-18) as a middle
+ * ground between DTIM10 (1000 TU, confirmed clean over 20+ min - zero
+ * beacon-miss escalations) and DTIM15 (1500 TU, confirmed BAD - see below)
+ * on this AP. History:
+ *   - DTIM15 (1500 TU): hardware logs showed run_bmiss hitting its
+ *     10-consecutive-miss threshold (exit_reason=1, EXIT_REASON_BEACON_MISS)
+ *     roughly every 100-150s, ~1 in 3 escalating into a full WLAN
+ *     disconnect+reconnect (6x consecutive Null-Tx failures -> MLME halt ->
+ *     fresh WPA 4-way handshake, ~7-9s each at full power, confirmed via the
+ *     "WiFi disconnected"/"WiFi connected" bracket in wlan_event_cb()) -
+ *     this AP does not tolerate DTIM15.
+ *   - DTIM10 (1000 TU): confirmed clean, zero beacon-miss escalations over
+ *     a 20+ minute run.
+ *   - DTIM12 (1200 TU): result not recorded before moving to 13 - re-verify
+ *     both if 13 also turns out fine, so we know exactly where this AP's
+ *     tolerance actually breaks between 10 and 15, not just "13 happened to
+ *     work".
+ *   - DTIM13 (this value): unverified - watch for exit_reason=1/
+ *     "WiFi disconnected" over a comparable (20+ min) run before trusting
+ *     it. VCNL3020_MQTT_LOG_ENABLE and vcnl3020_test.c's VCNL3020_LOG_ENABLE
+ *     are both back on for this test specifically so a failure is fully
+ *     visible - see those macros' own comments before turning them off
+ *     again.
+ * REMINDER: this value does NOT control the dominant ~30-40s wake pattern
+ * you're trying to reduce - those are exit_reason=2 (EXIT_REASON_TIM_UC,
+ * traffic-driven, see bmps_wake_probe_cb()'s comment), not a DTIM-schedule
+ * wake. Raising this only changes background beacon-housekeeping frequency
+ * and beacon-miss/disconnect risk - touch-detection latency (pin 22) is
+ * unaffected either way. Set before every qapi_WLAN_Commit(), see
+ * wlan_associate(). */
+#define VCNL3020_DTIM10_LISTEN_INTERVAL_TU  1300U
 /* BMPS idle-timeout passed to qapi_bmps_cfg() once BMPS engages. Was 50 -
  * ambient_power_demo.c's tuned value - but on hardware here (2026-08-14)
  * that value showed a real beacon-miss/reconnect storm right after BMPS
@@ -215,16 +226,17 @@ extern void vcnl3020_test_poll_now(void);
  * starts duty-cycling. */
 #define VCNL3020_BMPS_ENTER_DELAY_MS        15000U
 
-/* Master log switch - off by default to save the UART/CPU-active time
- * every printf() costs. Flip to 1 to get every line back for debugging -
- * no call sites change either way.
- *
- * TEMP DEBUG (2026-08-17): flipped on to chase the "publishes locally but
- * MQTTX doesn't see it for ~2 minutes" report - confirmed the sensor/I2C/
- * pin-22 path is NOT the culprit (STATUS line + power spike are both
- * immediate on touch), so this instruments the WMAC/BMPS side instead: see
- * bmps_wake_probe_cb()'s exit-reason log and mqtt_publish_status()'s
- * before/after MQTT_Publish() timing below. Revert to 0 once resolved. */
+/* Master log switch for routine/status/debug lines - back ON (2026-08-18,
+ * DTIM12 test) for full visibility while re-testing the listen interval
+ * (see VCNL3020_DTIM10_LISTEN_INTERVAL_TU's comment) - every bmps_wake/
+ * heartbeat/published line needs to be visible to catch a beacon-miss
+ * problem early, same reason it was on for the DTIM10-vs-DTIM15 tests.
+ * Flip back to 0 once DTIM12 is confirmed stable (or reverted) - every
+ * printf() costs real UART/CPU-active time, which fights the whole point
+ * of DTIM10/BMPS. Genuine failure conditions (WiFi disconnect, MQTT
+ * connect/session failures, queue/task creation failures, etc.) do NOT go
+ * through this switch either way - see err_printf below, always on
+ * regardless of this flag. */
 #define VCNL3020_MQTT_LOG_ENABLE       1
 
 #if VCNL3020_MQTT_LOG_ENABLE
@@ -232,6 +244,11 @@ extern void vcnl3020_test_poll_now(void);
 #else
 #define info_printf(msg, ...) do {} while (0)
 #endif
+
+/* Always-on - real failure/problem conditions only (WiFi/MQTT disconnects,
+ * connect failures, dropped events), never gated by VCNL3020_MQTT_LOG_ENABLE
+ * so these survive with logging otherwise off. */
+#define err_printf(msg, ...) printf("VCNL3020_MQTT: " msg, ##__VA_ARGS__)
 
 static qbool_t s_wlan_enabled;    /* qapi_WLAN_Enable() done - once, ever */
 static qbool_t s_wifi_connected;  /* set/cleared by wlan_event_cb on CONNECT/DISCONNECT */
@@ -264,7 +281,7 @@ static void wlan_event_cb(uint8_t deviceId, uint32_t cbId, void *appCtx, void *p
         info_printf("WiFi connected\n");
     } else {
         s_wifi_connected = FALSE;
-        info_printf("WiFi disconnected, reason=%d\n", cxnInfo->reason_code);
+        err_printf("WiFi disconnected, reason=%d\n", cxnInfo->reason_code);
     }
 }
 
@@ -279,7 +296,7 @@ static qapi_Status_t wlan_enable_once(void)
 
     qapi_WLAN_Set_Callback(wlan_event_cb, NULL);
     if (qapi_WLAN_Enable(true) != QAPI_OK) {
-        info_printf("WLAN enable failed\n");
+        err_printf("WLAN enable failed\n");
         return QAPI_ERROR;
     }
     s_wlan_enabled = TRUE;
@@ -349,7 +366,7 @@ static void prebmps_poll_start(void)
         s_prebmps_poll_timer = nt_create_timer(prebmps_poll_timer_cb, NULL,
             pdMS_TO_TICKS(VCNL3020_PREBMPS_POLL_INTERVAL_MS), pdTRUE);
         if (s_prebmps_poll_timer == NULL) {
-            info_printf("pre-BMPS poll timer create failed\n");
+            err_printf("pre-BMPS poll timer create failed\n");
             return;
         }
     }
@@ -465,7 +482,7 @@ static qapi_Status_t wlan_start_dhcp(void)
 
     netif = netif_get_by_index(netid);
     if (netif == NULL) {
-        info_printf("netif not found\n");
+        err_printf("netif not found\n");
         return QAPI_ERR_INVALID_PARAM;
     }
 
@@ -545,7 +562,7 @@ static int mqtt_connect(void)
 
     sock_status = Plaintext_Connect(&s_net_ctx, &server, MQTT_TRANSPORT_TIMEOUT_MS, MQTT_TRANSPORT_TIMEOUT_MS);
     if (sock_status != SOCKETS_SUCCESS) {
-        info_printf("TCP connect to %s:%d failed: %s (status=%d)\n",
+        err_printf("TCP connect to %s:%d failed: %s (status=%d)\n",
             MQTT_BROKER, MQTT_PORT, sockets_strerror(sock_status), (int)sock_status);
         return -1;
     }
@@ -560,7 +577,7 @@ static int mqtt_connect(void)
 
     mqtt_status = MQTT_Init(&s_mqtt_ctx, &transport, mqtt_get_time_ms, mqtt_event_cb, &netbuf);
     if (mqtt_status != MQTTSuccess) {
-        info_printf("MQTT_Init failed: %s\n", MQTT_Status_strerror(mqtt_status));
+        err_printf("MQTT_Init failed: %s\n", MQTT_Status_strerror(mqtt_status));
         Plaintext_Disconnect(&s_net_ctx);
         return -1;
     }
@@ -577,7 +594,7 @@ static int mqtt_connect(void)
 
     mqtt_status = MQTT_Connect(&s_mqtt_ctx, &conninfo, NULL, MQTT_CONNACK_TIMEOUT_MS, &session_present);
     if (mqtt_status != MQTTSuccess) {
-        info_printf("MQTT_Connect (CONNECT/CONNACK) failed: %s - check broker username/password\n",
+        err_printf("MQTT_Connect (CONNECT/CONNACK) failed: %s - check broker username/password\n",
             MQTT_Status_strerror(mqtt_status));
         Plaintext_Disconnect(&s_net_ctx);
         return -1;
@@ -590,7 +607,6 @@ static int mqtt_connect(void)
 static int mqtt_publish_status(uint8_t is_closed)
 {
     MQTTPublishInfo_t pub;
-    uint32_t t0, t1;
     MQTTStatus_t st;
     int saved_errno;
 
@@ -601,47 +617,15 @@ static int mqtt_publish_status(uint8_t is_closed)
     pub.pPayload = is_closed ? "CLOSED" : "OPEN";
     pub.payloadLength = is_closed ? (sizeof("CLOSED") - 1) : (sizeof("OPEN") - 1);
 
-    /* TEMP DEBUG (2026-08-17): t0/t1 around the actual MQTT_Publish() call
-     * (which does the blocking transport send under the hood) - if this
-     * delta is small (ms range) every time, the local publish is NOT what's
-     * taking ~2 min, and the delay is happening after this function returns
-     * (i.e. the frame is queued/sent locally but not actually leaving the
-     * radio promptly - correlate against bmps_wake_probe_cb()'s exit_reason
-     * log to see if the WMAC was actually awake+idle at this same
-     * timestamp). If this delta itself is huge, MQTT_Publish()/the
-     * transport send is blocking internally - different bug. */
-    /* errno capture (2026-08-18): grabbed IMMEDIATELY after MQTT_Publish()
-     * returns, before any other call (hres_timer_curr_time_ms() included) has
-     * a chance to touch it - this whole call chain is synchronous, single-
-     * task (wifi_mqtt_task -> mqtt_publish_status -> MQTT_Publish ->
-     * sendBuffer() -> transport.send == Plaintext_Send), so if the transport
-     * send failed, this is still that failure's own errno.
-     *
-     * Added to root-cause a real MQTTSendFailed seen on hardware
-     * (2026-08-17 log) that returned in ~0ms - too fast to be
-     * MQTT_SEND_TIMEOUT_MS (20000ms default, comp/mqtt/source/include/
-     * core_mqtt_config_defaults.h) exhausting on a merely-not-writable-yet
-     * socket; that leaves only an immediate hard error from select()/send()
-     * inside Plaintext_Send (modules/net/mqtt_client/mqtt_platform/
-     * plaintext_posix.c) - which already calls logTransportError(errno) on
-     * that exact path, but nothing from it showed up on the console, so
-     * capture it here too rather than depend on that shared library file's
-     * own logging config. */
-    t0 = hres_timer_curr_time_ms();
     st = MQTT_Publish(&s_mqtt_ctx, &pub, 0);
-    saved_errno = errno;
-    t1 = hres_timer_curr_time_ms();
+    saved_errno = errno; /* grabbed immediately - see logTransportError() in plaintext_posix.c */
 
     if (st != MQTTSuccess) {
-        info_printf("MQTT_Publish(%s) took %lu ms (t0=%lu t1=%lu), bmps=%s, status=%s, errno=%d (%s)\n",
-            (const char *)pub.pPayload, (unsigned long)(t1 - t0), (unsigned long)t0, (unsigned long)t1,
-            s_bmps_active ? "on" : "off", MQTT_Status_strerror(st), saved_errno, strerror(saved_errno));
+        err_printf("MQTT_Publish(%s) failed: %s, bmps=%s, errno=%d (%s)\n",
+            (const char *)pub.pPayload, MQTT_Status_strerror(st),
+            s_bmps_active ? "on" : "off", saved_errno, strerror(saved_errno));
         return -1;
     }
-
-    info_printf("MQTT_Publish(%s) took %lu ms (t0=%lu t1=%lu), bmps=%s, status=%s\n",
-        (const char *)pub.pPayload, (unsigned long)(t1 - t0), (unsigned long)t0, (unsigned long)t1,
-        s_bmps_active ? "on" : "off", MQTT_Status_strerror(st));
 
     info_printf("published %s to %s\n", (const char *)pub.pPayload, MQTT_TOPIC_PUB);
     return 0;
@@ -668,7 +652,7 @@ static void wifi_mqtt_task(void *arg)
     if (wlan_enable_once() != QAPI_OK) {
         /* Nothing recoverable to do here - qapi_WLAN_Enable() itself
          * failed, not just one association attempt. */
-        info_printf("cannot continue without WLAN enabled\n");
+        err_printf("cannot continue without WLAN enabled\n");
         vTaskDelete(NULL);
     }
 
@@ -693,15 +677,13 @@ static void wifi_mqtt_task(void *arg)
         /* ---- 1. WLAN: connect, wait until fully associated ---- */
         while (!s_wifi_connected) {
             if (wlan_associate() != QAPI_OK) {
-                info_printf("WLAN associate failed, retry in 5s\n");
+                err_printf("WLAN associate failed, retry in 5s\n");
                 vTaskDelay(pdMS_TO_TICKS(5000));
                 continue;
             }
             if (!wlan_wait_connected())
-                info_printf("WLAN connect timed out, retrying\n");
+                err_printf("WLAN connect timed out, retrying\n");
         }
-        info_printf("WLAN connected - DTIM10/BMPS engages in %us\n",
-            (unsigned)(VCNL3020_BMPS_ENTER_DELAY_MS / 1000U));
         bmps_enable_at_ms = hres_timer_curr_time_ms() + VCNL3020_BMPS_ENTER_DELAY_MS;
 
         /* Covers the sensor until pin 22 takes over once BMPS actually
@@ -711,7 +693,7 @@ static void wifi_mqtt_task(void *arg)
         /* ---- DHCP (skip if a lease from an earlier cycle is still bound) ---- */
         if (!wlan_dhcp_bound()) {
             while (s_wifi_connected && wlan_start_dhcp() != QAPI_OK) {
-                info_printf("DHCP start failed, retry in 5s\n");
+                err_printf("DHCP start failed, retry in 5s\n");
                 vTaskDelay(pdMS_TO_TICKS(5000));
             }
             while (s_wifi_connected && !wlan_dhcp_bound())
@@ -719,14 +701,12 @@ static void wifi_mqtt_task(void *arg)
         }
         if (!s_wifi_connected)
             continue; /* dropped mid-DHCP - restart this cycle from WLAN */
-        info_printf("DHCP bound\n");
 
         /* ---- 2. MQTT: connect, wait until fully connected ---- */
-        info_printf("connecting to MQTT broker %s:%d...\n", MQTT_BROKER, MQTT_PORT);
         while (mqtt_connect() != 0) {
             if (!s_wifi_connected)
                 break; /* WLAN dropped mid-retry - restart this cycle from WLAN */
-            info_printf("MQTT connect failed, retry in 5s\n");
+            err_printf("MQTT connect failed, retry in 5s\n");
             vTaskDelay(pdMS_TO_TICKS(5000));
         }
         if (!s_wifi_connected)
@@ -737,10 +717,8 @@ static void wifi_mqtt_task(void *arg)
             uint8_t is_closed;
             uint32_t wait_ms = MQTT_HEARTBEAT_INTERVAL_MS;
 
-            if (!s_wifi_connected) {
-                info_printf("WLAN dropped, reconnecting\n");
-                break;
-            }
+            if (!s_wifi_connected)
+                break; /* err_printf already fired from wlan_event_cb() */
 
             /* BUG FIX 2026-08-14: this check used to only ever get
              * re-evaluated at the top of THIS loop, which is otherwise
@@ -770,15 +748,9 @@ static void wifi_mqtt_task(void *arg)
             }
 
             if (xQueueReceive(s_publish_queue, &is_closed, pdMS_TO_TICKS(wait_ms)) == pdTRUE) {
-                /* TEMP DEBUG (2026-08-17): timestamp the moment this task
-                 * actually dequeues the event, to separate "sensor task ->
-                 * queue -> this task" handoff latency from whatever
-                 * mqtt_publish_status()/MQTT_Publish() itself measures. */
-                info_printf("dequeued %s from publish queue at %lu ms\n",
-                    is_closed ? "CLOSED" : "OPEN", (unsigned long)hres_timer_curr_time_ms());
                 s_last_status = is_closed;
                 if (mqtt_publish_status(is_closed) != 0) {
-                    info_printf("publish failed, reconnecting\n");
+                    err_printf("publish failed, reconnecting\n");
                     break;
                 }
             } else {
@@ -796,13 +768,9 @@ static void wifi_mqtt_task(void *arg)
                 MQTTStatus_t st = MQTT_ProcessLoop(&s_mqtt_ctx);
 
                 if (st != MQTTSuccess && st != MQTTNeedMoreBytes) {
-                    info_printf("session lost (%d), reconnecting\n", (int)st);
+                    err_printf("session lost (%d), reconnecting\n", (int)st);
                     break;
                 }
-
-                info_printf("heartbeat: alive, BMPS=%s, last_status=%s\n",
-                    s_bmps_active ? "on" : "off",
-                    (s_last_status == 0xFFU) ? "unknown" : (s_last_status ? "CLOSED" : "OPEN"));
             }
         }
 
@@ -820,19 +788,11 @@ static void wifi_mqtt_task(void *arg)
 
 void vcnl3020_mqtt_publish_status(uint8_t is_closed)
 {
-    /* TEMP DEBUG (2026-08-17): timestamp the moment the sensor task hands
-     * this event off - the other end of the pipeline from the "dequeued
-     * ..." log in wifi_mqtt_task()'s steady-state loop. A big gap between
-     * this and that log would point at the mqtt task itself being stuck
-     * elsewhere (e.g. mid MQTT_ProcessLoop()/reconnect) rather than at the
-     * radio/TX side. */
-    info_printf("enqueue %s at %lu ms\n", is_closed ? "CLOSED" : "OPEN", (unsigned long)hres_timer_curr_time_ms());
-
     if (s_publish_queue == NULL)
         return; /* vcnl3020_mqtt_start() not called yet - drop, nothing to hand this off to */
 
     if (xQueueSend(s_publish_queue, &is_closed, 0) != pdTRUE)
-        info_printf("publish queue full, dropped one STATUS event\n");
+        err_printf("publish queue full, dropped one STATUS event\n");
 }
 
 void vcnl3020_mqtt_start(void)
@@ -842,11 +802,11 @@ void vcnl3020_mqtt_start(void)
 
     s_publish_queue = xQueueCreate(MQTT_PUBLISH_QUEUE_DEPTH, sizeof(uint8_t));
     if (s_publish_queue == NULL) {
-        info_printf("queue create failed\n");
+        err_printf("queue create failed\n");
         return;
     }
 
     if (nt_qurt_thread_create(wifi_mqtt_task, "vcnl3020_mqtt", 4096, NULL, 5, &s_task_handle) != pdPASS) {
-        info_printf("task create failed\n");
+        err_printf("task create failed\n");
     }
 }

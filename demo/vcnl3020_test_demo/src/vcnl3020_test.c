@@ -133,7 +133,15 @@ extern uint32_t hres_timer_curr_time_ms(void);
 #define VCNL3020_ISR_TH_HI_BIT         (1U << 0)
 #define VCNL3020_ISR_TH_LOW_BIT        (1U << 1)
 
-#define VCNL3020_LED_CURRENT_MA        20U  /* register 0x83, 10 mA/step */
+/* Lowered 20->10 (2026-08-18, power pass) to cut the sensor's own continuous
+ * self-timed current draw (~2/s regardless of WLAN sleep state - see this
+ * file's top comment) - register 0x83, 10 mA/step. TRADE-OFF: reflected IR
+ * signal scales down roughly with LED current, so HIGH_THRESHOLD below was
+ * calibrated at 20mA (idle ~2150, touch ~4857+) and is now UNVERIFIED at
+ * 10mA - re-check the raw proximity value on a real touch (temporarily flip
+ * VCNL3020_LOG_ENABLE to 1 to see the "STATUS: ... raw=" line again) and
+ * re-tune HIGH_THRESHOLD if touches no longer clear it. */
+#define VCNL3020_LED_CURRENT_MA        10U
 #define VCNL3020_PROX_RATE_SELECT      0U   /* 1.95 measurements/s */
 
 /* See this file's top comment for how this value was picked. */
@@ -146,14 +154,13 @@ extern uint32_t hres_timer_curr_time_ms(void);
  * sources. */
 #define VCNL3020_POLL_NOW_BIT          (1U << 0)
 
-/* Master log switch - off by default to save the UART/CPU-active time
- * every printf() costs. Flip to 1 to get every line back for debugging -
- * no call sites change either way.
- *
- * TEMP DEBUG (2026-08-17): flipped on together with wifi_mqtt.c's own
- * switch to chase the "publishes locally but MQTTX doesn't see it for ~2
- * min" report - see wifi_mqtt.c's matching comment. Revert to 0 once
- * resolved. */
+/* Master log switch for routine/status/debug lines - back ON (2026-08-18,
+ * DTIM12 test, see wifi_mqtt.c's VCNL3020_DTIM10_LISTEN_INTERVAL_TU comment)
+ * for full visibility (STATUS lines) while re-testing the listen interval.
+ * Flip back to 0 once DTIM12 is confirmed stable (or reverted) - every
+ * printf() costs real UART/CPU-active time. Genuine failure conditions
+ * (I2C/sensor faults, task creation failure) do NOT go through this switch
+ * either way - see err_printf below, always on regardless of this flag. */
 #define VCNL3020_LOG_ENABLE            1
 
 #if VCNL3020_LOG_ENABLE
@@ -161,6 +168,11 @@ extern uint32_t hres_timer_curr_time_ms(void);
 #else
 #define info_printf(msg, ...) do {} while (0)
 #endif
+
+/* Always-on - real failure/problem conditions only (I2C/sensor faults, task
+ * creation failure), never gated by VCNL3020_LOG_ENABLE so these survive
+ * with logging otherwise off. */
+#define err_printf(msg, ...) printf("VCNL3020: " msg, ##__VA_ARGS__)
 
 static TaskHandle_t s_task_handle;
 /* Last OPEN(0)/CLOSED(1) status actually printed/published. 0xFF = unknown,
@@ -243,7 +255,7 @@ static int vcnl3020_i2c_reopen(void)
 
     qapi_I2CM_Close(VCNL3020_I2C_INSTANCE);
     if (qapi_I2CM_Open(VCNL3020_I2C_INSTANCE, &cfg) != QAPI_OK) {
-        info_printf("I2C reopen failed\n");
+        err_printf("I2C reopen failed\n");
         return -1;
     }
     return 0;
@@ -301,16 +313,16 @@ static int vcnl3020_configure(void)
                   (uint8_t)(VCNL3020_INT_COUNT_EXCEED << VCNL3020_ICR_COUNT_EXCEED_SHIFT);
 
     if (qapi_I2CM_Open(VCNL3020_I2C_INSTANCE, &i2c_cfg) != QAPI_OK) {
-        info_printf("I2C open failed\n");
+        err_printf("I2C open failed\n");
         return -1;
     }
 
     if (vcnl3020_write_reg(VCNL3020_REG_IR_LED_CURRENT, (uint8_t)(VCNL3020_LED_CURRENT_MA / 10U)) != 0) {
-        info_printf("LED current write failed\n");
+        err_printf("LED current write failed\n");
         return -1;
     }
     if (vcnl3020_write_reg(VCNL3020_REG_PROXIMITY_RATE, VCNL3020_PROX_RATE_SELECT) != 0) {
-        info_printf("proximity rate write failed\n");
+        err_printf("proximity rate write failed\n");
         return -1;
     }
 
@@ -323,7 +335,7 @@ static int vcnl3020_configure(void)
         vcnl3020_write_reg(VCNL3020_REG_LOW_THR_LO, (uint8_t)(LOW_THRESHOLD & 0xFF)) != 0 ||
         vcnl3020_write_reg(VCNL3020_REG_HIGH_THR_HI, (uint8_t)(HIGH_THRESHOLD >> 8)) != 0 ||
         vcnl3020_write_reg(VCNL3020_REG_HIGH_THR_LO, (uint8_t)(HIGH_THRESHOLD & 0xFF)) != 0) {
-        info_printf("threshold write failed\n");
+        err_printf("threshold write failed\n");
         return -1;
     }
 
@@ -332,7 +344,7 @@ static int vcnl3020_configure(void)
      * INT_PROX_READY_EN deliberately left OFF - no interrupt on every
      * single measurement, threshold crossings only. */
     if (vcnl3020_write_reg(VCNL3020_REG_ICR, icr) != 0) {
-        info_printf("interrupt control write failed\n");
+        err_printf("interrupt control write failed\n");
         return -1;
     }
 
@@ -341,7 +353,7 @@ static int vcnl3020_configure(void)
     if (vcnl3020_write_reg(VCNL3020_REG_COMMAND, VCNL3020_CMD_SELFTIMED_EN_BIT) != 0 ||
         vcnl3020_write_reg(VCNL3020_REG_COMMAND,
             VCNL3020_CMD_SELFTIMED_EN_BIT | VCNL3020_CMD_PROX_EN_BIT) != 0) {
-        info_printf("self-timed enable failed\n");
+        err_printf("self-timed enable failed\n");
         return -1;
     }
 
@@ -375,7 +387,7 @@ static void vcnl3020_test_task(void *arg)
         xTaskNotifyWait(0, VCNL3020_POLL_NOW_BIT, &notified, portMAX_DELAY);
 
         if (vcnl3020_poll_and_clear(&proximity) != 0) {
-            info_printf("poll read failed (I2C), will retry next trigger\n");
+            err_printf("poll read failed (I2C), will retry next trigger\n");
             continue;
         }
 
@@ -401,6 +413,6 @@ void vcnl3020_test_start(void)
         return;
 
     if (nt_qurt_thread_create(vcnl3020_test_task, "vcnl3020_test", 2048, NULL, 5, &s_task_handle) != pdPASS) {
-        info_printf("task create failed\n");
+        err_printf("task create failed\n");
     }
 }

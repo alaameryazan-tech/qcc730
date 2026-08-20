@@ -71,13 +71,41 @@ extern uint32_t UART_Send_direct(char *txbuf, uint32_t buflen);
 #define POWERTEST_WIFI_SSID       "FRITZ!Box7590AX"
 #define POWERTEST_WIFI_PASSPHRASE "Tech91847"
 
-/* Delay before engaging BMPS/DTIM10 sleep, so WLAN + the MQTT test
- * publisher's first connect/publish have a full-power window to finish
- * establishing before the radio starts duty-cycling on the DTIM10
- * interval. pm_enable() still always fires after this delay regardless of
- * whether MQTT succeeded, so the core DTIM10 sleep-test path is unaffected
- * if the broker is unreachable. */
-#define POWERTEST_BMPS_ENTER_DELAY_MS 30000U
+/* Root cause of the "board disconnects from MQTTX after 20+ min" symptom
+ * (2026-08-20 investigation): under DTIM10/BMPS, this AP does NOT reliably
+ * deliver every beacon/buffered frame on schedule - the WLAN firmware's own
+ * "Exit: reason=2 run_bmiss=.." log lines show a nonzero, non-fatal
+ * beacon-miss count on effectively every BMPS wake even at DTIM10 (see
+ * demo/vcnl3020_test_demo/src/wifi_mqtt.c's DTIM10/13/15 history comment).
+ * That's expected/tolerable jitter for a power-save station on this AP, NOT
+ * a dead link - but the WLAN firmware's default consecutive-beacon-miss
+ * threshold (__QAPI_WLAN_PARAM_GROUP_WIRELESS_STA_BMISS_CONFIG, ~10 per that
+ * same hardware capture) is tuned for a station that is NOT deliberately
+ * sleeping through most beacons, so a short, ordinary run of misses
+ * eventually crosses it and the firmware tears down the association and
+ * reassociates from scratch - what MQTTX sees as the board dropping off.
+ * All the MQTT-side reconnect/keepalive/QoS2 hardening already in this repo
+ * papers over that reassociation after the fact; this raises the threshold
+ * itself so routine DTIM10 beacon-miss jitter on this AP no longer crosses
+ * it in the first place. 30 is this SDK's own ceiling for the equivalent
+ * MIB knob (NT_DEVCFG_CONN_CONSECUTIVE_BMISS_THRESHOLD, modules/wifi/
+ * config_ini/mib/mib.xml, range locked to exactly 30) - reused here as the
+ * highest value this build is known to accept. */
+#define POWERTEST_BMISS_THRESHOLD 30U
+
+/* BMPS/DTIM10 sleep is engaged event-driven, right after the MQTT test
+ * publisher reports a successful broker CONNACK (g_mqtt_connected, set by
+ * mqtt_printf_task.c) - not after a blind post-WLAN-connect delay. A fixed
+ * delay short enough to feel "immediate" (e.g. 0ms) let DTIM10 start
+ * duty-cycling the radio before the MQTT TCP connect could complete,
+ * causing repeated connect failures; a delay long enough to always be safe
+ * defeated the point of entering sleep quickly. Polling for the actual
+ * connect result gets both: sleep starts the moment it's safe to.
+ * POWERTEST_BMPS_ENTER_MAX_WAIT_MS is just a safety cap so pm_enable()
+ * still always fires eventually even if the broker is unreachable, so the
+ * core DTIM10 sleep-test path is unaffected either way. */
+#define POWERTEST_BMPS_ENTER_MAX_WAIT_MS  30000U
+#define POWERTEST_BMPS_POLL_INTERVAL_MS     200U
 
 /* Automatically enter IMPS deep sleep a short while after connecting, so the
  * board can be measured with no USB/console attached. Set to 0 to fall back
@@ -209,6 +237,10 @@ extern qapi_Status_t wmi_cmd_send(WMI_COMMAND_ID cmd_id, void *p_data, uint32_t 
  * SHT40 sensor. See mqtt_printf_task_start() call in the CONNECT handler
  * below. */
 extern void mqtt_printf_task_start(void);
+/* Set by mqtt_printf_task.c once the MQTT test publisher gets a successful
+ * CONNACK - powertest_pm_enable_task() polls this to know when it's safe
+ * to engage BMPS/DTIM10 sleep. */
+extern volatile uint8_t g_mqtt_connected;
 /* Starts the DHCPv4 client on the STA netif (net_shell.c) - equivalent to
  * running "dhcpv4c wlan1 new" on the console. Without this the STA netif
  * stays on its unconfigured 127.0.0.1 default and every outbound
@@ -661,11 +693,50 @@ void pm_enable()
 
 static void powertest_pm_enable_task(void *arg)
 {
+    uint32_t waited_ms = 0;
     (void)arg;
 
-    info_printf("delaying BMPS/DTIM10 sleep by %u ms so WLAN+MQTT can fully establish first\n",
-        (unsigned)POWERTEST_BMPS_ENTER_DELAY_MS);
-    vTaskDelay(pdMS_TO_TICKS(POWERTEST_BMPS_ENTER_DELAY_MS));
+    /* Raise the firmware's consecutive-beacon-miss disconnect threshold
+     * BEFORE BMPS/DTIM10 engages below - see POWERTEST_BMISS_THRESHOLD's
+     * comment for why this is the actual fix for the "disconnects after
+     * 20+ min" symptom. MUST run from this dedicated task, not from
+     * wlan_shell_event_handler() (the WLAN driver's own event-dispatch
+     * callback): qapi_WLAN_Set_Param() for this param blocks on a
+     * qurt_signal_wait() for the WMI command's own completion signal
+     * (see wlan_set_bmiss_threshold(), drivers/wlan/wlan_qapi_helper.c) -
+     * calling it from inside the event-dispatch callback itself deadlocks
+     * (waiting on a signal that context would have to deliver to itself),
+     * which was confirmed on hardware: nothing after that call ever ran,
+     * so DHCP/MQTT/BMPS never started at all. This task's own separate
+     * FreeRTOS context doesn't have that problem. */
+    {
+        uint8_t bmiss_threshold = POWERTEST_BMISS_THRESHOLD;
+
+        if (qapi_WLAN_Set_Param(DEV_STA_ID, __QAPI_WLAN_PARAM_GROUP_WIRELESS,
+                __QAPI_WLAN_PARAM_GROUP_WIRELESS_STA_BMISS_CONFIG,
+                &bmiss_threshold, sizeof(bmiss_threshold), FALSE) != QAPI_OK) {
+            info_printf("set bmiss threshold failed, disconnect-under-DTIM10 fix not applied\n");
+        } else {
+            info_printf("bmiss threshold raised to %u (DTIM10/BMPS disconnect fix)\n",
+                (unsigned)bmiss_threshold);
+        }
+    }
+
+    info_printf("waiting for MQTT connect (up to %u ms) before engaging BMPS/DTIM10 sleep\n",
+        (unsigned)POWERTEST_BMPS_ENTER_MAX_WAIT_MS);
+
+    while (!g_mqtt_connected && waited_ms < POWERTEST_BMPS_ENTER_MAX_WAIT_MS) {
+        vTaskDelay(pdMS_TO_TICKS(POWERTEST_BMPS_POLL_INTERVAL_MS));
+        waited_ms += POWERTEST_BMPS_POLL_INTERVAL_MS;
+    }
+
+    if (g_mqtt_connected) {
+        info_printf("MQTT connected after %u ms, engaging BMPS/DTIM10 sleep now\n",
+            (unsigned)waited_ms);
+    } else {
+        info_printf("MQTT still not connected after %u ms, engaging BMPS/DTIM10 sleep anyway\n",
+            (unsigned)waited_ms);
+    }
 
     pm_enable();
 

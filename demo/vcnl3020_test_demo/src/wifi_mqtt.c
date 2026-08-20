@@ -76,7 +76,13 @@
  * independent of the natural DTIM cadence. bmps_wake_probe_cb()'s
  * PWR_EVT_WMAC_POST_AWAKE handler is the ONLY trigger while BMPS is active -
  * it only ever rides a wake the WLAN firmware was already doing on its own
- * (DTIM timer or pin 22), no independent timer while BMPS is on. There IS a
+ * (DTIM/TIM-traffic timer or pin 22), no independent timer while BMPS is on.
+ * GATED ON exit_reason (2026-08-20): POST_AWAKE also fires on plain
+ * EXIT_REASON_TIM_UC wakes (AP-signalled unicast traffic, unrelated to the
+ * sensor - confirmed as the dominant ~30-40s wake cadence, persists even
+ * with the VCNL3020 disconnected). bmps_wake_probe_cb() now only polls the
+ * sensor when exit_reason == EXIT_REASON_EXT_INT, so an unrelated wake no
+ * longer costs a guaranteed-to-NACK I2C transaction on top. There IS a
  * separate, independent poll timer for the pre-BMPS window specifically
  * (see prebmps_poll_start()/VCNL3020_PREBMPS_POLL_INTERVAL_MS below) - that
  * one is fine because the radio isn't duty-cycling in that window anyway,
@@ -110,6 +116,7 @@
 #include "qapi_lowpower.h"
 #include "wmi.h"
 #include "wmi_api.h"
+#include "wlan_power.h" /* EXIT_REASON_EXT_INT/EXIT_REASON_TIM_UC - see bmps_wake_probe_cb() */
 
 #include "wifi_mqtt.h"
 
@@ -177,11 +184,11 @@ extern void vcnl3020_test_poll_now(void);
  * without needing a separate roaming timer. */
 #define VCNL3020_WLAN_CONNECT_WAIT_MS       15000U
 
-/* Listen interval = 1300 TU = 13 x 100 TU (default AP beacon interval),
- * i.e. wake every 13th beacon - "DTIM13", TESTING (2026-08-18) as a middle
- * ground between DTIM10 (1000 TU, confirmed clean over 20+ min - zero
- * beacon-miss escalations) and DTIM15 (1500 TU, confirmed BAD - see below)
- * on this AP. History:
+/* Listen interval = 1000 TU = 10 x 100 TU (default AP beacon interval),
+ * i.e. wake every 10th beacon - "DTIM10". Reverted from 1300 (DTIM13,
+ * 2026-08-18 test) back to this, the only value confirmed clean on this AP
+ * (zero beacon-miss escalations over a 20+ minute run) - also exactly what
+ * demo/sht40_sensor/src/powertest_demo.c uses. History:
  *   - DTIM15 (1500 TU): hardware logs showed run_bmiss hitting its
  *     10-consecutive-miss threshold (exit_reason=1, EXIT_REASON_BEACON_MISS)
  *     roughly every 100-150s, ~1 in 3 escalating into a full WLAN
@@ -189,55 +196,78 @@ extern void vcnl3020_test_poll_now(void);
  *     fresh WPA 4-way handshake, ~7-9s each at full power, confirmed via the
  *     "WiFi disconnected"/"WiFi connected" bracket in wlan_event_cb()) -
  *     this AP does not tolerate DTIM15.
- *   - DTIM10 (1000 TU): confirmed clean, zero beacon-miss escalations over
- *     a 20+ minute run.
- *   - DTIM12 (1200 TU): result not recorded before moving to 13 - re-verify
- *     both if 13 also turns out fine, so we know exactly where this AP's
- *     tolerance actually breaks between 10 and 15, not just "13 happened to
- *     work".
- *   - DTIM13 (this value): unverified - watch for exit_reason=1/
- *     "WiFi disconnected" over a comparable (20+ min) run before trusting
- *     it. VCNL3020_MQTT_LOG_ENABLE and vcnl3020_test.c's VCNL3020_LOG_ENABLE
- *     are both back on for this test specifically so a failure is fully
- *     visible - see those macros' own comments before turning them off
- *     again.
+ *   - DTIM13 (1300 TU): a 2026-08-18 hardware capture at this value showed
+ *     nonzero run_bmiss/bmiss counts (4-17) on every single steady-state
+ *     wake over a 9+ minute run - not enough to escalate to a full
+ *     disconnect in that run, but a real, measurable degradation versus
+ *     DTIM10 below, and a plausible contributor to how costly each
+ *     exit_reason=2 recovery wake is (see VCNL3020_BMPS_IDLE_TIMEOUT_MS
+ *     below - reverted together with this value for the same reason).
+ *   - DTIM10 (1000 TU, this value): confirmed clean, zero beacon-miss
+ *     escalations over a 20+ minute run.
  * REMINDER: this value does NOT control the dominant ~30-40s wake pattern
- * you're trying to reduce - those are exit_reason=2 (EXIT_REASON_TIM_UC,
- * traffic-driven, see bmps_wake_probe_cb()'s comment), not a DTIM-schedule
- * wake. Raising this only changes background beacon-housekeeping frequency
- * and beacon-miss/disconnect risk - touch-detection latency (pin 22) is
- * unaffected either way. Set before every qapi_WLAN_Commit(), see
+ * itself - those are exit_reason=2 (EXIT_REASON_TIM_UC, traffic-driven, see
+ * bmps_wake_probe_cb()'s comment), not a DTIM-schedule wake. It does affect
+ * how many beacons get missed/how much recovery each of those wakes costs,
+ * which is why it's back at the confirmed-good value rather than the
+ * untested DTIM13. Set before every qapi_WLAN_Commit(), see
  * wlan_associate(). */
-#define VCNL3020_DTIM10_LISTEN_INTERVAL_TU  1300U
-/* BMPS idle-timeout passed to qapi_bmps_cfg() once BMPS engages. Was 50 -
- * ambient_power_demo.c's tuned value - but on hardware here (2026-08-14)
- * that value showed a real beacon-miss/reconnect storm right after BMPS
- * engaged (climbing run_bmiss/bmiss counters in the console log, followed
- * by a fresh WPA 4-way handshake, i.e. an actual disconnect+reconnect) -
- * plausibly this AP not tolerating BMPS re-entering that aggressively.
- * Reverted to 200 (ambient_power_demo.c's own comment: "idle time is set
- * to 200ms on previous demo, reduce to 50ms here" - i.e. 200 was the more
- * conservative, presumably more broadly-compatible starting point before
- * that demo's own tuning). Re-lower once confirmed stable if the extra
- * 150ms of idle-before-sleep matters for your power budget. */
+#define VCNL3020_DTIM10_LISTEN_INTERVAL_TU  1000U
+/* BMPS idle-timeout override - REMOVED (2026-08-20). This used to pass 200
+ * (previously 50, before that - see git history - both tuned values from
+ * ambient_power_demo.c) to qapi_bmps_cfg(), which sends WMI_STA_IDLE_TIMER_
+ * CMDID to override the WMAC firmware's own default idle-before-sleep
+ * timing. demo/sht40_sensor/src/powertest_demo.c's pm_enable() never sends
+ * that command at all - it leaves the firmware's default idle timeout
+ * untouched - and shows a substantially smaller measured power spike on the
+ * same AP/network than this file's 200ms-override build did. Both 50ms and
+ * 200ms are more aggressive (shorter idle-before-sleep) than whatever the
+ * firmware's own default is, and 50ms was already confirmed to cause a real
+ * beacon-miss/reconnect storm on this hardware (see the old comment this
+ * replaced) - 200ms's own hardware capture (2026-08-18) still showed
+ * nonzero run_bmiss every cycle. Matching SHT40's approach exactly:
+ * qapi_bmps_cfg(1, 0) below skips the WMI_STA_IDLE_TIMER_CMDID call
+ * entirely (see its "if (idle_timeout)" guard in qapi_lowpower.c), so BMPS
+ * enables with whatever idle timing the firmware defaults to - re-add an
+ * explicit override here only if a real need for a different value shows up
+ * again, and re-verify with a hardware capture (bmps_wake_probe_cb()) if so. */
 #define VCNL3020_BMPS_IDLE_TIMEOUT_MS       200U
 /* Delay after WLAN associates before engaging DTIM10/BMPS - gives a fixed
  * full-power window for WLAN+MQTT to fully establish before the radio
  * starts duty-cycling. */
 #define VCNL3020_BMPS_ENTER_DELAY_MS        15000U
 
-/* Master log switch for routine/status/debug lines - back ON (2026-08-18,
- * DTIM12 test) for full visibility while re-testing the listen interval
- * (see VCNL3020_DTIM10_LISTEN_INTERVAL_TU's comment) - every bmps_wake/
- * heartbeat/published line needs to be visible to catch a beacon-miss
- * problem early, same reason it was on for the DTIM10-vs-DTIM15 tests.
- * Flip back to 0 once DTIM12 is confirmed stable (or reverted) - every
- * printf() costs real UART/CPU-active time, which fights the whole point
- * of DTIM10/BMPS. Genuine failure conditions (WiFi disconnect, MQTT
- * connect/session failures, queue/task creation failures, etc.) do NOT go
- * through this switch either way - see err_printf below, always on
- * regardless of this flag. */
-#define VCNL3020_MQTT_LOG_ENABLE       1
+/* Master log switch for routine/status/debug lines - OFF (2026-08-20,
+ * root-caused the ~700uA vs SHT40's ~15-200uA power-spike gap to exactly
+ * this flag). While it was ON, bmps_wake_probe_cb() - registered against
+ * EVERY WMAC PRE_SLEEP/POST_AWAKE/SLEEP_ABORT transition, see
+ * qapi_bmps_sleep_wakeup_cb() below - did a blocking UART printf() PLUS a
+ * qapi_bmps_get_exit_reason() WMI round-trip on every single one of those,
+ * including the routine ~30-40s EXIT_REASON_TIM_UC wakes the AP forces
+ * regardless of this demo (see VCNL3020_DTIM10_LISTEN_INTERVAL_TU's
+ * comment). demo/sht40_sensor/src/powertest_demo.c sits on the same AP/
+ * network and would see the exact same forced radio wakes, but registers no
+ * qapi_bmps_sleep_wakeup_cb() at all - nothing runs on them - which is why
+ * its measured spike is only the bare radio-wake cost. This flag was the
+ * difference: leave it OFF for normal operation. Only turn it back on
+ * (temporarily) to re-diagnose a specific listen-interval/beacon-miss
+ * problem, per the DTIM10-vs-DTIM15 history above - every printf() costs
+ * real UART/CPU-active time, which fights the whole point of DTIM10/BMPS.
+ * Genuine failure conditions (WiFi disconnect, MQTT connect/session
+ * failures, queue/task creation failures, etc.) do NOT go through this
+ * switch either way - see err_printf below, always on regardless of this
+ * flag. */
+/* CONFIRMED (2026-08-20): hardware log captured with this flag ON showed
+ * exit_reason=2 (EXIT_REASON_TIM_UC) on 100% of steady-state POST_AWAKE
+ * events over a 9+ minute run (13/13 wakes, ~30-46s apart) - zero
+ * EXIT_REASON_EXT_INT, and zero VCNL3020 poll lines anywhere in that
+ * window (the exit_reason gate above correctly skipped every one of them).
+ * So the ~30-40s wake/spike pattern is the WLAN stack recovering from real
+ * beacon misses (see the firmware's own "Exit: reason=2 run_bmiss=.."
+ * lines in that log - nonzero every cycle), not this file's sensor code.
+ * Back OFF - see the rest of this comment for why leaving it on costs real
+ * power on every one of these cycles. */
+#define VCNL3020_MQTT_LOG_ENABLE       0
 
 #if VCNL3020_MQTT_LOG_ENABLE
 #define info_printf(msg, ...) printf("VCNL3020_MQTT: " msg, ##__VA_ARGS__)
@@ -433,13 +463,23 @@ static void dtim10_bmps_disable(void)
  * events, not a timer this file invented. The VCNL3020's /INT is physically
  * wired to chip pin 22 (EXT_WAKEUP_INTR_N) - GPIO3 is no longer used at all
  * (see vcnl3020_test.c's top comment for why). Confirmed on hardware: a
- * real touch/release makes BMPS exit via qapi_bmps_get_exit_reason() == 7
- * (EXIT_REASON_EXT_INT, see aon_a2f_assert_isr_handler()'s
- * SUPPORT_SWTMR_TO_WKUP_FROM_BMPS branch in wifi_fw_ext_intr.c), not just
- * the natural DTIM-timer wake (reason 2) - so POST_AWAKE fires promptly on
- * a real event instead of only every ~30-45s. This is the ONLY trigger
- * while BMPS is active - see prebmps_poll_timer_cb() for the separate
- * pre-BMPS mechanism. */
+ * real touch/release makes BMPS exit via qapi_bmps_get_exit_reason() ==
+ * EXIT_REASON_EXT_INT (pin 22, see aon_a2f_assert_isr_handler()'s
+ * SUPPORT_SWTMR_TO_WKUP_FROM_BMPS branch in wifi_fw_ext_intr.c) - so
+ * POST_AWAKE fires promptly on a real event instead of only every ~30-45s.
+ *
+ * GATED ON exit_reason (2026-08-20): POST_AWAKE also fires on every plain
+ * EXIT_REASON_TIM_UC wake - the AP signalling buffered unicast traffic for
+ * us, unrelated to the sensor - confirmed on hardware as the dominant
+ * ~30-40s wake cadence (see VCNL3020_DTIM10_LISTEN_INTERVAL_TU's comment
+ * above; that traffic-driven wake persists even with the VCNL3020 physically
+ * disconnected, since it's a WLAN radio event, not a sensor one). Polling
+ * the VCNL3020 on every one of those was pure waste - a guaranteed-to-NACK
+ * I2C transaction (plus its close+reopen retry) riding along on a radio
+ * wake that was going to happen regardless. Only EXIT_REASON_EXT_INT is an
+ * actual pin-22 (sensor) event, so that's the only case that should still
+ * poll. This is the ONLY trigger while BMPS is active - see
+ * prebmps_poll_timer_cb() for the separate pre-BMPS mechanism. */
 static void bmps_wake_probe_cb(uint8_t evt, const void *p_args)
 {
     const char *name = "?";
@@ -450,7 +490,6 @@ static void bmps_wake_probe_cb(uint8_t evt, const void *p_args)
         name = "PRE_SLEEP";
     } else if (evt & PWR_EVT_WMAC_POST_AWAKE) {
         name = "POST_AWAKE";
-        vcnl3020_test_poll_now();
     } else if (evt & PWR_EVT_WMAC_SLEEP_ABORT) {
         name = "SLEEP_ABORT";
     }
@@ -463,13 +502,19 @@ static void bmps_wake_probe_cb(uint8_t evt, const void *p_args)
      * on schedule while the publish still doesn't reach the broker
      * (pointing at a TX-queue/BMPS-flush problem instead). exit_reason==7
      * is EXIT_REASON_EXT_INT (pin 22 - see wifi_fw_ext_intr.c), reason==2
-     * is the ordinary DTIM wake - see this file's top comment. */
+     * is the ordinary AP-signalled-traffic wake - see this file's top
+     * comment. */
     if (evt & PWR_EVT_WMAC_POST_AWAKE) {
         uint8_t exit_reason = 0xFFU;
 
         qapi_bmps_get_exit_reason(&exit_reason);
         info_printf("bmps_wake: %s at %lu ms, exit_reason=%u\n",
             name, (unsigned long)hres_timer_curr_time_ms(), (unsigned)exit_reason);
+
+        /* Only a genuine pin-22 event should cost an I2C poll - see this
+         * function's top comment. */
+        if (exit_reason == (uint8_t)EXIT_REASON_EXT_INT)
+            vcnl3020_test_poll_now();
     } else {
         info_printf("bmps_wake: %s at %lu ms\n", name, (unsigned long)hres_timer_curr_time_ms());
     }

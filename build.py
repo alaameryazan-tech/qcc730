@@ -28,7 +28,8 @@ image_list = [
     'FERMION_POWER_TEST_DEMO',
     'FERMION_AMBIENT_POWER_DEMO',
     'FERMION_VCNL3020_TEST_DEMO',
-    'FERMION_SHT40_SENSOR_DEMO']
+    'FERMION_SHT40_SENSOR_DEMO',
+    'FERMION_DTIM10_CONTROL_DEMO']
 proj_conf = {
     'FERMION_IOE_QCLI_DEMO':'demo/qcli_demo/prj.conf',
     'FERMION_SBL':'demo/qcli_demo/prj.conf',
@@ -44,7 +45,8 @@ proj_conf = {
     'FERMION_POWER_TEST_DEMO':'demo/powertest_demo/prj.conf',
     'FERMION_AMBIENT_POWER_DEMO':'demo/ambient_power_demo/prj.conf',
     'FERMION_VCNL3020_TEST_DEMO':'demo/vcnl3020_test_demo/prj.conf',
-    'FERMION_SHT40_SENSOR_DEMO':'demo/sht40_sensor/prj.conf'
+    'FERMION_SHT40_SENSOR_DEMO':'demo/sht40_sensor/prj.conf',
+    'FERMION_DTIM10_CONTROL_DEMO':'demo/dtim10_control_demo/prj.conf'
 }
 default_build_output = 'build'
 gn_path = '/pkg/qct/software/ubuntu/matter_tool'

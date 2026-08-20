@@ -9,7 +9,7 @@
  * as the qcli_demo SHT40 publisher (sht40_task.c) and the SHT40 I2C read
  * sequence from that same file, but wired into the DTIM10 power-test flow:
  * publishes one reading immediately after connecting, then goes idle in
- * DTIM10 sleep and publishes again every MQTT_PUBLISH_INTERVAL_MS (10 min
+ * DTIM10 sleep and publishes again every MQTT_PUBLISH_INTERVAL_MS (5 min
  * by default) so current draw can be measured under DTIM10 with only
  * infrequent, predictable wake bursts for real sensor data.
  *
@@ -29,12 +29,27 @@
 #include "plaintext_posix.h"
 #include "nt_timer.h"
 
+/* TEMP DIAGNOSTIC - point at a local mosquitto on the same WiFi/subnet as
+ * the board (192.168.80.163, allow_anonymous) instead of the VPS, to check
+ * whether the ~15-20 min disconnect is broker/WAN-path-related or purely
+ * device-side: same-subnet traffic never crosses the router's WAN NAT, so
+ * this also rules out router NAT/conntrack aging, not just the remote
+ * broker itself. Flip MQTT_USE_LOCAL_TEST_BROKER back to 0 (restores the
+ * VPS + username/password) once the test is done. */
+#define MQTT_USE_LOCAL_TEST_BROKER  1
+
 /* Same broker/topic/QoS/reconnect handling as the SHT40 MQTT publisher. */
+#if MQTT_USE_LOCAL_TEST_BROKER
+#define MQTT_BROKER                 "192.168.80.163"
+#define MQTT_USERNAME               NULL
+#define MQTT_PASSWORD               NULL
+#else
 #define MQTT_BROKER                 "139.162.181.126"
-#define MQTT_PORT                   1883
-#define MQTT_CLIENT_ID              "sht40_qcc7030"
 #define MQTT_USERNAME               "AABBCCDD"
 #define MQTT_PASSWORD               "KXL8DHPsXggvRELD"
+#endif
+#define MQTT_PORT                   1883
+#define MQTT_CLIENT_ID              "sht40_qcc7030"
 #define MQTT_TOPIC_PUB              "sensor/sht40"
 #define MQTT_TOPIC_CMD              "sensor/cmd"
 /* Status/availability topic: retained "connected" published right after
@@ -54,8 +69,8 @@
 #define MQTT_TRANSPORT_TIMEOUT_MS   1000U
 
 /* How often a reading is measured and published once connected: once
- * immediately on (re)connect, then on this interval. 10 min matches the
- * keepalive above, so publishes also double as the traffic keeping the
+ * immediately on (re)connect, then on this interval. Shorter than the
+ * keepalive above, so publishes still double as the traffic keeping the
  * session alive - no separate idle PINGREQ needed most cycles. */
 /* Also doubles as the ONLY wake interval for the whole task once
  * connected/idle - see mqtt_printf_task(). Every call to MQTT_ProcessLoop()
@@ -67,7 +82,14 @@
  * do. Neither this nor MQTT_KEEPALIVE_SEC need anywhere near that kind of
  * precision, so the task now sleeps for this entire interval in one shot -
  * a single wake per cycle, the minimum possible for this workload. */
-#define MQTT_PUBLISH_INTERVAL_MS    600000U
+#define MQTT_PUBLISH_INTERVAL_MS    300000U
+
+/* How long to keep polling MQTT_ProcessLoop() after a QoS2 publish, waiting
+ * for its PUBCOMP, before giving up and reconnecting - see the QoS2 handling
+ * in mqtt_printf_task(). Generous relative to a normal LAN/WAN round trip,
+ * but still tiny next to MQTT_PUBLISH_INTERVAL_MS. */
+#define MQTT_PUBACK_WAIT_TIMEOUT_MS   5000U
+#define MQTT_PUBACK_POLL_INTERVAL_MS   200U
 
 /* Set to 0 to establish WLAN + MQTT and then stay fully silent in DTIM10
  * sleep (no periodic publish at all) - useful for a clean baseline
@@ -86,11 +108,32 @@
  * completes; also used to unwind this task's loops on disconnect. */
 extern uint8_t g_wifi_ready;
 
+/* Set true here once mqtt_connect_and_subscribe() first succeeds (CONNACK
+ * received); powertest_demo.c's powertest_pm_enable_task() polls this to
+ * engage BMPS/DTIM10 sleep as soon as it's safe, instead of guessing with a
+ * fixed delay. Left true across later reconnects - only meant to gate that
+ * one first entry into DTIM10 sleep, not to track live connection state. */
+volatile uint8_t g_mqtt_connected;
+
 static PlaintextParams_t s_net_params;
 static NetworkContext_t  s_net_ctx;
 static MQTTContext_t     s_mqtt_ctx;
 static uint8_t           s_mqtt_buf[MQTT_NETWORK_BUF_SIZE];
 static volatile int      s_publish_now;
+
+/* Outgoing-publish ack bookkeeping, needed by MQTT_InitStatefulQoS() to
+ * allow QoS2 publishes (see mqtt_publish()). Only ever one reading in
+ * flight at a time, but a couple of spare slots costs nothing. */
+#define MQTT_OUTGOING_PUBLISH_RECORDS 2U
+static MQTTPubAckInfo_t  s_outgoing_pub_records[MQTT_OUTGOING_PUBLISH_RECORDS];
+
+/* Set when a QoS2 sensor-reading publish is sent, cleared when its PUBCOMP
+ * (the final "exactly once, confirmed delivered" step of the QoS2
+ * handshake) is seen in mqtt_event_cb(). Checked at the start of the next
+ * cycle - see mqtt_publish()/mqtt_printf_task() for why this matters over
+ * trusting MQTT_Publish()'s return value alone. */
+static volatile uint16_t s_last_pub_packet_id;
+static volatile uint8_t  s_awaiting_pub_ack;
 static TaskHandle_t      s_task_handle;
 static volatile uint8_t  s_started;
 
@@ -216,6 +259,22 @@ static void mqtt_event_cb(MQTTContext_t *ctx, MQTTPacketInfo_t *pkt, MQTTDeseria
 
     (void)ctx;
 
+    /* QoS2 4-packet handshake for our sensor-reading publish: broker sends
+     * PUBREC first (received, not yet fully settled), we reply PUBREL
+     * (handled internally by MQTT_ProcessLoop()), broker then sends
+     * PUBCOMP - THAT's the actual "exactly once, confirmed delivered"
+     * signal, not PUBREC. Either way this is a genuine broker-side
+     * confirmation, unlike MQTT_Publish()'s return value which only means
+     * the local transport accepted the write. See mqtt_publish(). */
+    if (pkt->type == MQTT_PACKET_TYPE_PUBCOMP) {
+        if (s_awaiting_pub_ack && info->packetIdentifier == s_last_pub_packet_id)
+            s_awaiting_pub_ack = 0;
+        return;
+    }
+
+    /* PUBREC (and anything else that isn't a PUBLISH) falls through to
+     * here and is discarded by the mask check below - intentional, we
+     * only care about the final PUBCOMP above. */
     if ((pkt->type & 0xF0U) != MQTT_PACKET_TYPE_PUBLISH)
         return;
 
@@ -252,8 +311,20 @@ static int mqtt_connect_and_subscribe(void)
     server.hostNameLength = sizeof(MQTT_BROKER) - 1;
     server.port = MQTT_PORT;
 
-    if (Plaintext_Connect(&s_net_ctx, &server, MQTT_TRANSPORT_TIMEOUT_MS, MQTT_TRANSPORT_TIMEOUT_MS) != SOCKETS_SUCCESS)
-        return -1;
+    {
+        SocketStatus_t sock_status = Plaintext_Connect(&s_net_ctx, &server,
+            MQTT_TRANSPORT_TIMEOUT_MS, MQTT_TRANSPORT_TIMEOUT_MS);
+        if (sock_status != SOCKETS_SUCCESS) {
+            /* Distinguishes "couldn't even open the TCP socket to the
+             * broker" (this) from the MQTT-level failures below - see the
+             * SocketStatus_t values in sockets_posix.h for what each number
+             * means (DNS failure, connect refused/timed out, etc). Was
+             * previously silent, indistinguishable from every other
+             * "connect failed" cause. */
+            info_printf("Plaintext_Connect failed, status=%d\n", (int)sock_status);
+            return -1;
+        }
+    }
 
     transport.pNetworkContext = &s_net_ctx;
     transport.send = Plaintext_Send;
@@ -263,20 +334,43 @@ static int mqtt_connect_and_subscribe(void)
     netbuf.pBuffer = s_mqtt_buf;
     netbuf.size = sizeof(s_mqtt_buf);
 
-    if (MQTT_Init(&s_mqtt_ctx, &transport, mqtt_get_time_ms, mqtt_event_cb, &netbuf) != MQTTSuccess) {
-        Plaintext_Disconnect(&s_net_ctx);
-        return -1;
+    {
+        MQTTStatus_t mqtt_status = MQTT_Init(&s_mqtt_ctx, &transport, mqtt_get_time_ms, mqtt_event_cb, &netbuf);
+        if (mqtt_status != MQTTSuccess) {
+            info_printf("MQTT_Init failed, status=%d\n", (int)mqtt_status);
+            Plaintext_Disconnect(&s_net_ctx);
+            return -1;
+        }
     }
+
+    /* Needed for QoS2 publishes (see mqtt_publish()) - tracks unacked
+     * outgoing PUBLISHes so a lost one can actually be detected instead of
+     * trusting MQTT_Publish()'s return value alone. No incoming QoS>0
+     * records needed, our subscribe is QoS0. */
+    {
+        MQTTStatus_t mqtt_status = MQTT_InitStatefulQoS(&s_mqtt_ctx, s_outgoing_pub_records,
+            MQTT_OUTGOING_PUBLISH_RECORDS, NULL, 0);
+        if (mqtt_status != MQTTSuccess) {
+            info_printf("MQTT_InitStatefulQoS failed, status=%d\n", (int)mqtt_status);
+            Plaintext_Disconnect(&s_net_ctx);
+            return -1;
+        }
+    }
+    s_awaiting_pub_ack = 0;
 
     memset(&conninfo, 0, sizeof(conninfo));
     conninfo.cleanSession = true;
     conninfo.keepAliveSeconds = MQTT_KEEPALIVE_SEC;
     conninfo.pClientIdentifier = MQTT_CLIENT_ID;
     conninfo.clientIdentifierLength = sizeof(MQTT_CLIENT_ID) - 1;
+    /* MQTT_USERNAME/PASSWORD are NULL in the MQTT_USE_LOCAL_TEST_BROKER
+     * (anonymous) build above - sizeof(MQTT_USERNAME) would be sizeof(a
+     * pointer) in that case, not a string length, so length must be 0
+     * whenever the pointer itself is NULL. */
     conninfo.pUserName = MQTT_USERNAME;
-    conninfo.userNameLength = sizeof(MQTT_USERNAME) - 1;
+    conninfo.userNameLength = MQTT_USERNAME ? (sizeof(MQTT_USERNAME) - 1) : 0;
     conninfo.pPassword = MQTT_PASSWORD;
-    conninfo.passwordLength = sizeof(MQTT_PASSWORD) - 1;
+    conninfo.passwordLength = MQTT_PASSWORD ? (sizeof(MQTT_PASSWORD) - 1) : 0;
 
     /* Last Will: the BROKER publishes this on our behalf, NOT retained, only
      * if we drop off ungracefully (no clean MQTT DISCONNECT) - e.g. power
@@ -291,9 +385,14 @@ static int mqtt_connect_and_subscribe(void)
     willInfo.pPayload = MQTT_LWT_MESSAGE;
     willInfo.payloadLength = sizeof(MQTT_LWT_MESSAGE) - 1;
 
-    if (MQTT_Connect(&s_mqtt_ctx, &conninfo, &willInfo, MQTT_CONNACK_TIMEOUT_MS, &session_present) != MQTTSuccess) {
-        Plaintext_Disconnect(&s_net_ctx);
-        return -1;
+    {
+        MQTTStatus_t mqtt_status = MQTT_Connect(&s_mqtt_ctx, &conninfo, &willInfo,
+            MQTT_CONNACK_TIMEOUT_MS, &session_present);
+        if (mqtt_status != MQTTSuccess) {
+            info_printf("MQTT_Connect failed, status=%d\n", (int)mqtt_status);
+            Plaintext_Disconnect(&s_net_ctx);
+            return -1;
+        }
     }
 
     /* Publish our own retained "connected" status right away, so the topic
@@ -316,14 +415,19 @@ static int mqtt_connect_and_subscribe(void)
     sub.pTopicFilter = MQTT_TOPIC_CMD;
     sub.topicFilterLength = sizeof(MQTT_TOPIC_CMD) - 1;
     sub_id = MQTT_GetPacketId(&s_mqtt_ctx);
-    if (MQTT_Subscribe(&s_mqtt_ctx, &sub, 1, sub_id) != MQTTSuccess) {
-        Plaintext_Disconnect(&s_net_ctx);
-        return -1;
+    {
+        MQTTStatus_t mqtt_status = MQTT_Subscribe(&s_mqtt_ctx, &sub, 1, sub_id);
+        if (mqtt_status != MQTTSuccess) {
+            info_printf("MQTT_Subscribe failed, status=%d\n", (int)mqtt_status);
+            Plaintext_Disconnect(&s_net_ctx);
+            return -1;
+        }
     }
 
     {
         MQTTStatus_t process_status = MQTT_ProcessLoop(&s_mqtt_ctx);
         if (process_status != MQTTSuccess && process_status != MQTTNeedMoreBytes) {
+            info_printf("post-subscribe MQTT_ProcessLoop failed, status=%d\n", (int)process_status);
             Plaintext_Disconnect(&s_net_ctx);
             return -1;
         }
@@ -338,6 +442,7 @@ static int mqtt_publish(int temp_x10, int rh_x10)
     char msg[48];
     int len;
     MQTTPublishInfo_t pub;
+    uint16_t packet_id;
 
     len = snprintf(msg, sizeof(msg), "Temp=%d.%dC Feuchte=%d.%d%%",
                    temp_x10 / 10, temp_x10 % 10, rh_x10 / 10, rh_x10 % 10);
@@ -345,7 +450,15 @@ static int mqtt_publish(int temp_x10, int rh_x10)
         return -1;
 
     memset(&pub, 0, sizeof(pub));
-    pub.qos = MQTTQoS0;
+    /* QoS2, not QoS0: a QoS0 MQTT_Publish() returning success only means
+     * the local transport accepted the write, not that the broker actually
+     * got it - under a degraded DTIM10 link that gap let readings vanish
+     * silently (device log said "success", nothing showed up on the
+     * broker). QoS2's PUBCOMP is a genuine broker-side "exactly once,
+     * confirmed delivered" signal, so a missing one is a real sign
+     * something's wrong - see s_awaiting_pub_ack, mqtt_event_cb(), and its
+     * check in mqtt_printf_task(). */
+    pub.qos = MQTTQoS2;
     pub.retain = false;
     pub.dup = false;
     pub.pTopicName = MQTT_TOPIC_PUB;
@@ -353,7 +466,13 @@ static int mqtt_publish(int temp_x10, int rh_x10)
     pub.pPayload = msg;
     pub.payloadLength = (size_t)len;
 
-    return MQTT_Publish(&s_mqtt_ctx, &pub, 0) == MQTTSuccess ? 0 : -1;
+    packet_id = MQTT_GetPacketId(&s_mqtt_ctx);
+    if (MQTT_Publish(&s_mqtt_ctx, &pub, packet_id) != MQTTSuccess)
+        return -1;
+
+    s_last_pub_packet_id = packet_id;
+    s_awaiting_pub_ack = 1;
+    return 0;
 }
 
 /* Take one SHT40 reading and publish it. Used both right after connecting
@@ -420,6 +539,11 @@ static void mqtt_printf_task(void *arg)
             continue;
         }
 
+        /* Reaching here means mqtt_connect_and_subscribe() just succeeded
+         * (the while loop above only exits early otherwise). Unblocks
+         * powertest_pm_enable_task()'s wait for g_mqtt_connected. */
+        g_mqtt_connected = 1;
+
         /* No separate "initial publish" here: the inner loop's first pass
          * (immediately below, before its vTaskDelay) already publishes
          * right after connecting - having both was the bug that caused
@@ -438,6 +562,20 @@ static void mqtt_printf_task(void *arg)
             if (st != MQTTSuccess && st != MQTTNeedMoreBytes) {
                 info_printf("session lost (%d), reconnecting\n", (int)st);
                 Plaintext_Disconnect(&s_net_ctx);
+                break;
+            }
+
+            /* Previous cycle's QoS2 reading never reached PUBCOMP, even
+             * after a full MQTT_PUBLISH_INTERVAL_MS plus the ProcessLoop()
+             * call just above to pick it up - the session looked alive (no
+             * error from ProcessLoop) but the broker never actually
+             * confirmed that message. Reconnect rather than silently
+             * publishing the next reading on a session already known to be
+             * dropping data. */
+            if (s_awaiting_pub_ack) {
+                info_printf("previous reading never acked by broker, reconnecting\n");
+                Plaintext_Disconnect(&s_net_ctx);
+                s_publish_now = 0;
                 break;
             }
 
@@ -465,9 +603,57 @@ static void mqtt_printf_task(void *arg)
                  * inside the helper): MQTT_ProcessLoop() above already
                  * confirmed the session is fine. There's no faster retry
                  * anymore - a bad reading now costs a full
-                 * MQTT_PUBLISH_INTERVAL_MS (10 min) wait before the next
+                 * MQTT_PUBLISH_INTERVAL_MS (5 min) wait before the next
                  * attempt, traded deliberately for the lower wake
                  * frequency. */
+
+                /* result == 0: a QoS2 publish just went out (see
+                 * mqtt_publish()), which needs PUBREC/PUBREL/PUBCOMP round
+                 * trips to actually settle - one MQTT_ProcessLoop() call
+                 * isn't enough time for that multi-step handshake to
+                 * finish, especially right after the radio wakes from a
+                 * long BMPS/DTIM10 sleep. Poll for a few seconds here so a
+                 * healthy link gets a fair chance to complete it before we
+                 * sleep - the alternative was declaring readings "never
+                 * acked" (and reconnecting) when really they just hadn't
+                 * had time to be acked yet. If it's still not settled after
+                 * this, the link is genuinely bad and reconnecting now
+                 * beats silently burning a full MQTT_PUBLISH_INTERVAL_MS
+                 * asleep unable to deliver anything. */
+                if (s_awaiting_pub_ack) {
+                    uint32_t waited_ms = 0;
+                    uint8_t  session_lost = 0;
+
+                    while (s_awaiting_pub_ack && !session_lost && waited_ms < MQTT_PUBACK_WAIT_TIMEOUT_MS) {
+                        vTaskDelay(pdMS_TO_TICKS(MQTT_PUBACK_POLL_INTERVAL_MS));
+                        waited_ms += MQTT_PUBACK_POLL_INTERVAL_MS;
+
+                        /* A non-success status here isn't necessarily about
+                         * our PUBCOMP specifically - MQTTKeepAliveTimeout
+                         * (10) in particular means coreMQTT's own internal
+                         * PINGREQ never got a PINGRESP within its fixed
+                         * MQTT_PINGRESP_TIMEOUT_MS (5000ms, core_mqtt_config.h)
+                         * - a real broker round-trip stall, whatever the
+                         * cause. Either way, ProcessLoop() itself is saying
+                         * the session's bad, so treat it as such. */
+                        st = MQTT_ProcessLoop(&s_mqtt_ctx);
+                        if (st != MQTTSuccess && st != MQTTNeedMoreBytes) {
+                            info_printf("MQTT_ProcessLoop failed while settling (status=%d), reconnecting\n", (int)st);
+                            session_lost = 1;
+                        }
+                    }
+
+                    if (session_lost || s_awaiting_pub_ack) {
+                        if (!session_lost) {
+                            info_printf("reading still not acked after %ums, reconnecting\n",
+                                (unsigned)waited_ms);
+                        }
+                        s_awaiting_pub_ack = 0;
+                        Plaintext_Disconnect(&s_net_ctx);
+                        s_publish_now = 0;
+                        break;
+                    }
+                }
             }
 #endif /* MQTT_AUTO_PUBLISH */
             s_publish_now = 0;

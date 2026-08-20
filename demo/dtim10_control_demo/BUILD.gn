@@ -1,0 +1,38 @@
+# Copyright (c) 2026 Qualcomm Innovation Center, Inc. All rights reserved.
+#SPDX-License-Identifier: BSD-3-Clause-Clear
+#
+import("//configs_decl.gni")
+
+dtim10_control_demo_inc = [
+    "src",
+    "//drivers/wlan/",
+]
+
+dtim10_control_demo_src = [
+    "src/dtim10_control_main.c",
+    "src/wifi_mqtt.c",
+
+    # WLAN driver sources - not pulled in globally here since prj.conf
+    # deliberately does not set CONFIG_WIFI_SHELL (wifi_mqtt.c is a
+    # shell/console-free WLAN client) - same pattern as
+    # demo/vcnl3020_test_demo/BUILD.gn.
+    "//drivers/wlan/wlan_drv.c",
+    "//drivers/wlan/qapi_wlan_base.c",
+    "//drivers/wlan/qapi_wlan_param_group.c",
+    "//drivers/wlan/wmi_api.c",
+    "//drivers/wlan/wlan_qapi_helper.c",
+]
+
+not_needed("*", [ ])
+
+config("_config") {
+    if (image_name == "FERMION_DTIM10_CONTROL_DEMO") {
+        include_dirs = dtim10_control_demo_inc
+    }
+}
+
+source_set("dtim10_control_demo") {
+    if (image_name == "FERMION_DTIM10_CONTROL_DEMO") {
+        sources = dtim10_control_demo_src
+    }
+}

@@ -107,6 +107,7 @@ projects_common = [
     "//modules/supplicant",
     "//demo/vcnl3020_test_demo",
     "//demo/sht40_sensor",
+    "//demo/dtim10_control_demo",
 ]
 
 if (!CONFIG_WPS_LIB) {

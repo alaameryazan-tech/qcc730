@@ -268,7 +268,7 @@ static int vcnl3020_i2c_reopen(void)
  * nothing here is edge-triggered anymore (it's what lets pin 22 see a
  * fresh edge on the NEXT transition). Returns 0 on success, -1 on an
  * unrecoverable I2C failure. */
-static int vcnl3020_poll_and_clear(uint16_t *out_proximity)
+static int vcnl3020_poll_and_clear(uint16_t *out_proximity, uint8_t *out_isr_bits)
 {
     uint8_t isr = 0;
 
@@ -282,6 +282,8 @@ static int vcnl3020_poll_and_clear(uint16_t *out_proximity)
     isr &= (VCNL3020_ISR_TH_HI_BIT | VCNL3020_ISR_TH_LOW_BIT);
     if (isr != 0 && vcnl3020_write_reg(VCNL3020_REG_ISR, isr) != 0)
         return -1;
+    if (out_isr_bits != NULL)
+        *out_isr_bits = isr;
 
     if (vcnl3020_read_result_once(out_proximity) != 0) {
         if (vcnl3020_i2c_reopen() != 0)
@@ -383,13 +385,25 @@ static void vcnl3020_test_task(void *arg)
     for (;;) {
         uint32_t notified;
         uint16_t proximity;
+        uint8_t isr_bits = 0;
 
         xTaskNotifyWait(0, VCNL3020_POLL_NOW_BIT, &notified, portMAX_DELAY);
 
-        if (vcnl3020_poll_and_clear(&proximity) != 0) {
+        if (vcnl3020_poll_and_clear(&proximity, &isr_bits) != 0) {
             err_printf("poll read failed (I2C), will retry next trigger\n");
             continue;
         }
+
+        /* CONFIRMED (2026-08-20): this line, captured unconditionally
+         * against a hardware log, showed zero polls at all during the
+         * ~30-40s steady-state wake cadence (only during the pre-BMPS
+         * window) - that cadence is exit_reason=2 (EXIT_REASON_TIM_UC,
+         * WLAN beacon-miss recovery), not a sensor event - see
+         * VCNL3020_MQTT_LOG_ENABLE's comment in wifi_mqtt.c. Re-gated
+         * behind VCNL3020_LOG_ENABLE now that its job is done - still
+         * useful for future bring-up, just not worth the always-on cost. */
+        info_printf("poll: raw=%u isr_bits=0x%02x at %lu ms\n",
+            (unsigned)proximity, (unsigned)isr_bits, (unsigned long)hres_timer_curr_time_ms());
 
         {
             uint8_t state = (proximity >= HIGH_THRESHOLD) ? 1U : 0U;

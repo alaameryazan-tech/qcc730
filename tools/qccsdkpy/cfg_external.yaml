@@ -38,7 +38,7 @@ qccsdk:
     #    001lcli means original local cli. For qualcomm internal use.
     #    intg means integration, defined internally. For qualcomm internal use.
     #    <external dir> means application locating out side of qccsdk, requiring matching demo files configuration such as prj.conf
-    appdir: &appdir demo/vcnl3020_test_demo
+    appdir: &appdir demo/sht40_sensor
     #configure output_path as '*output'
     output: &output output
     #configure jtag interface name, support ['openocd', 'jlink', 'trace32']

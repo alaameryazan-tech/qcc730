@@ -52,6 +52,27 @@
  */
 #define ONE_MS_TO_US (1000)
 
+/**
+ * @brief Bound on the TCP connect handshake specifically (connectToAddress()),
+ * kept deliberately separate from the caller's sendTimeoutMs/recvTimeoutMs
+ * (which only govern SO_SNDTIMEO/RCVTIMEO for sends/receives on an already-
+ * connected socket, further down in Sockets_Connect()).
+ *
+ * Callers in this codebase generally pass a short (~1000ms) transport
+ * timeout meant to catch a dead *established* connection quickly. Applying
+ * that same short bound to the connect handshake itself turned out to be
+ * too tight in practice on this platform: observed failures logged
+ * SOCKETS_CONNECT_FAILURE almost exactly ~1000ms after the connect attempt
+ * started - the handshake was still in progress (SYN sent, no response yet)
+ * and got cut off, particularly right after the WLAN radio had just come
+ * out of a BMPS/DTIM10 sleep-entry hiccup (nt_socpm_check_sleep_entry_failure
+ * "sleep failed" in the platform's WLAN driver) and needed more than 1s to
+ * fully recover before it could complete a handshake. A longer, fixed
+ * budget here gives the handshake a fair chance without loosening the
+ * failure-detection speed for already-established connections.
+ */
+#define SOCKETS_CONNECT_TIMEOUT_MS (5000U)
+
 /*-----------------------------------------------------------*/
 
 /**
@@ -73,23 +94,32 @@ static SocketStatus_t resolveHostName(const char *pHostName, size_t hostNameLeng
  * @param[in] pHostName Server host name.
  * @param[in] hostNameLength Length associated with host name.
  * @param[in] port Server port in host-order.
+ * @param[in] connectTimeoutMs Bound on how long the connect handshake itself
+ * (not send/recv afterward) may block - see connectToAddress().
  * @param[out] pTcpSocket The output parameter to return the created socket.
  *
  * @return #SOCKETS_SUCCESS if successful; #SOCKETS_CONNECT_FAILURE on error.
  */
 static SocketStatus_t attemptConnection(struct addrinfo *pListHead, const char *pHostName, size_t hostNameLength,
-                                        uint16_t port, int32_t *pTcpSocket);
+                                        uint16_t port, uint32_t connectTimeoutMs, int32_t *pTcpSocket);
 
 /**
  * @brief Connect to server using the provided address record.
  *
  * @param[in, out] pAddrInfo Address record of the server.
  * @param[in] port Server port in host-order.
- * @param[in] pTcpSocket Socket handle.
+ * @param[in] tcpSocket Socket handle.
+ * @param[in] connectTimeoutMs How long to wait for the TCP handshake to
+ * complete before giving up. The caller's sendTimeoutMs/recvTimeoutMs (SO_SND/
+ * RCVTIMEO) only take effect once already connected - without this, connect()
+ * itself is a fully blocking call bounded only by the OS/lwIP's own internal
+ * SYN retry timeout, which can run for tens of seconds to minutes and was
+ * silently ignoring the caller's intended timeout entirely.
  *
  * @return #SOCKETS_SUCCESS if successful; #SOCKETS_CONNECT_FAILURE on error.
  */
-static SocketStatus_t connectToAddress(struct sockaddr *pAddrInfo, uint16_t port, int32_t tcpSocket);
+static SocketStatus_t connectToAddress(struct sockaddr *pAddrInfo, uint16_t port, int32_t tcpSocket,
+                                       uint32_t connectTimeoutMs);
 
 /**
  * @brief Log possible error using errno and return appropriate status.
@@ -136,10 +166,12 @@ static SocketStatus_t resolveHostName(const char *pHostName, size_t hostNameLeng
 }
 /*-----------------------------------------------------------*/
 
-static SocketStatus_t connectToAddress(struct sockaddr *pAddrInfo, uint16_t port, int32_t tcpSocket)
+static SocketStatus_t connectToAddress(struct sockaddr *pAddrInfo, uint16_t port, int32_t tcpSocket,
+                                       uint32_t connectTimeoutMs)
 {
     SocketStatus_t returnStatus = SOCKETS_SUCCESS;
     int32_t connectStatus = 0;
+    int32_t nonBlockingFlag = 1;
 #if LWIP_IPV6
     char resolvedIpAddr[INET6_ADDRSTRLEN];
 #else
@@ -200,8 +232,94 @@ static SocketStatus_t connectToAddress(struct sockaddr *pAddrInfo, uint16_t port
          " IP address=%s.",
          resolvedIpAddr));
 
-    /* Attempt to connect. */
+    /* Make the socket non-blocking for the connect handshake specifically,
+     * so a stalled SYN (no route, lost packet, AP-side power-save hiccup)
+     * is bounded by connectTimeoutMs instead of the OS/lwIP's own internal
+     * SYN retry timeout - previously connect() below was fully blocking
+     * and the caller's timeout was never applied to it at all, only to
+     * sends/receives after the fact. Restored to blocking afterward, since
+     * the rest of this file (and Plaintext_Send/Recv) assumes a blocking
+     * socket with SO_SNDTIMEO/RCVTIMEO, set by the caller right after this
+     * returns.
+     *
+     * Uses ioctl(FIONBIO) rather than fcntl(O_NONBLOCK): this codebase has
+     * more than one fcntl.h in its include paths (e.g. modules/fs/fcntl.h)
+     * defining O_NONBLOCK as a different bit value than lwIP's own, so
+     * which one wins depends on include-path resolution - a real risk of
+     * silently not actually setting non-blocking mode. FIONBIO is the
+     * mechanism lwIP's own sockets.h documents as supported - via
+     * ioctlsocket(), not the bare ioctl() name: that one's only mapped to
+     * lwip_ioctl() when LWIP_POSIX_SOCKETS_IO_NAMES is set, which this
+     * build's lwipopts doesn't enable (confirmed by the linker: undefined
+     * reference to `ioctl`). ioctlsocket() is defined unconditionally
+     * alongside closesocket()/connect()/etc. below that guard, so it's the
+     * name actually available here. */
+    connectStatus = ioctlsocket(tcpSocket, FIONBIO, &nonBlockingFlag);
+    if (connectStatus != 0) {
+        LogError(("Failed to set socket non-blocking before connect: IP address=%s.", resolvedIpAddr));
+        (void)closesocket(tcpSocket);
+        return SOCKETS_CONNECT_FAILURE;
+    }
+
     connectStatus = connect(tcpSocket, pAddrInfo, addrInfoLength);
+
+    if (connectStatus == -1) {
+        int32_t connectErrno = errno;
+
+        if ((connectErrno == EINPROGRESS) || (connectErrno == EWOULDBLOCK)) {
+            fd_set writeFds;
+            struct timeval connectTimeout;
+            int32_t selectStatus;
+
+            FD_ZERO(&writeFds);
+            FD_SET(tcpSocket, &writeFds);
+            connectTimeout.tv_sec = (((int64_t)connectTimeoutMs) / ONE_SEC_TO_MS);
+            connectTimeout.tv_usec = (ONE_MS_TO_US * (((int64_t)connectTimeoutMs) % ONE_SEC_TO_MS));
+
+            selectStatus = select(tcpSocket + 1, NULL, &writeFds, NULL, &connectTimeout);
+
+            if (selectStatus > 0) {
+                int32_t sockErr = 0;
+                socklen_t sockErrLen = (socklen_t)sizeof(sockErr);
+
+                if ((getsockopt(tcpSocket, SOL_SOCKET, SO_ERROR, &sockErr, &sockErrLen) == 0) && (sockErr == 0)) {
+                    connectStatus = 0;
+                } else {
+                    /* printf(), not LogError() - LogError from this file has
+                     * never once shown up on the actual console across a
+                     * long debugging session, so it's not routed anywhere
+                     * visible here. This is the one piece of information
+                     * that was missing to tell "SYN sent, never answered"
+                     * apart from "handshake completed but with an error"
+                     * apart from "rejected immediately, never even tried". */
+                    printf("Sockets_Connect: connect() completed with error after select(), SO_ERROR=%d (%s): IP address=%s\r\n",
+                           (int)sockErr, strerror(sockErr), resolvedIpAddr);
+                    connectStatus = -1;
+                }
+            } else {
+                /* selectStatus == 0: timed out without the handshake settling.
+                 * selectStatus < 0: select() itself failed. Either way the
+                 * connect didn't complete in time. */
+                printf("Sockets_Connect: connect() timed out after %u ms waiting for handshake (selectStatus=%d): IP address=%s\r\n",
+                       (unsigned int)connectTimeoutMs, (int)selectStatus, resolvedIpAddr);
+                connectStatus = -1;
+            }
+        } else {
+            /* connect() rejected the attempt immediately - it never even
+             * got as far as sending a SYN over the air. This is the case
+             * that was completely invisible before: no route to host, ARP
+             * failure, network unreachable, etc. all landed on the exact
+             * same unlabeled "Plaintext_Connect failed, status=5" as a
+             * genuine handshake timeout, with nothing distinguishing them. */
+            printf("Sockets_Connect: connect() rejected immediately, errno=%d (%s): IP address=%s\r\n",
+                   (int)connectErrno, strerror(connectErrno), resolvedIpAddr);
+        }
+    }
+
+    /* Always restore blocking mode before returning, on both the success
+     * and failure paths - a closed socket just ignores the ioctlsocket() call. */
+    nonBlockingFlag = 0;
+    (void)ioctlsocket(tcpSocket, FIONBIO, &nonBlockingFlag);
 
     if (connectStatus == -1) {
         LogError(("Failed to connect to server using the resolved IP address: IP address=%s.", resolvedIpAddr));
@@ -214,7 +332,7 @@ static SocketStatus_t connectToAddress(struct sockaddr *pAddrInfo, uint16_t port
 /*-----------------------------------------------------------*/
 
 static SocketStatus_t attemptConnection(struct addrinfo *pListHead, const char *pHostName, size_t hostNameLength,
-                                        uint16_t port, int32_t *pTcpSocket)
+                                        uint16_t port, uint32_t connectTimeoutMs, int32_t *pTcpSocket)
 {
     SocketStatus_t returnStatus = SOCKETS_CONNECT_FAILURE;
     const struct addrinfo *pIndex = NULL;
@@ -239,7 +357,7 @@ static SocketStatus_t attemptConnection(struct addrinfo *pListHead, const char *
         }
 
         /* Attempt to connect to a resolved DNS address of the host. */
-        returnStatus = connectToAddress(pIndex->ai_addr, port, *pTcpSocket);
+        returnStatus = connectToAddress(pIndex->ai_addr, port, *pTcpSocket, connectTimeoutMs);
 
         /* If connected to an IP address successfully, exit from the loop. */
         if (returnStatus == SOCKETS_SUCCESS) {
@@ -285,8 +403,6 @@ SocketStatus_t Sockets_Connect(int32_t *pTcpSocket, const ServerInfo_t *pServerI
     struct addrinfo *pListHead = NULL;
     struct timeval transportTimeout;
     int32_t setTimeoutStatus = -1;
-    (void)sendTimeoutMs;
-    (void)recvTimeoutMs;
 
     if (pServerInfo == NULL) {
         LogError(("Parameter check failed: pServerInfo is NULL."));
@@ -309,8 +425,16 @@ SocketStatus_t Sockets_Connect(int32_t *pTcpSocket, const ServerInfo_t *pServerI
     }
 
     if (returnStatus == SOCKETS_SUCCESS) {
+        /* The connect handshake itself is now bounded (see
+         * connectToAddress()) - previously it was fully unbounded, blocked
+         * only by the OS/lwIP's own internal SYN retry timeout, silently
+         * ignoring any timeout the caller thought applied. Uses a fixed,
+         * more generous SOCKETS_CONNECT_TIMEOUT_MS rather than the
+         * caller's sendTimeoutMs/recvTimeoutMs - those two continue to
+         * mean exactly what they did before (SO_SNDTIMEO/RCVTIMEO for an
+         * already-connected socket, below), unaffected by this. */
         returnStatus = attemptConnection(pListHead, pServerInfo->pHostName, pServerInfo->hostNameLength,
-                                         pServerInfo->port, pTcpSocket);
+                                         pServerInfo->port, SOCKETS_CONNECT_TIMEOUT_MS, pTcpSocket);
     }
 
     /* Set the send timeout. */

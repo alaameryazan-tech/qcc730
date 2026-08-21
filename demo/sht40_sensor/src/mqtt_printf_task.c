@@ -293,6 +293,30 @@ static void mqtt_event_cb(MQTTContext_t *ctx, MQTTPacketInfo_t *pkt, MQTTDeseria
         s_publish_now = 1;
 }
 
+/* Retained keep-alive/liveness publish on MQTT_TOPIC_STATUS, separate from
+ * the sensor reading on MQTT_TOPIC_PUB - called once right after connecting
+ * (mqtt_connect_and_subscribe()) AND once every MQTT_PUBLISH_INTERVAL_MS
+ * cycle thereafter (mqtt_printf_task()), so the retained "connected" value
+ * carries a recent timestamp instead of just whatever it was when the
+ * session first came up, possibly hours ago. Best-effort (QoS0, like the
+ * one-shot online publish this replaces) - a dropped keep-alive isn't worth
+ * reconnecting over by itself; MQTT_ProcessLoop()'s own keepalive and the
+ * QoS2 sensor publish's ack-wait (see mqtt_publish()) are what actually
+ * detect a dead session. */
+static void mqtt_publish_online_status(void)
+{
+    MQTTPublishInfo_t onlineInfo;
+
+    memset(&onlineInfo, 0, sizeof(onlineInfo));
+    onlineInfo.qos = MQTTQoS0;
+    onlineInfo.retain = true;
+    onlineInfo.pTopicName = MQTT_TOPIC_STATUS;
+    onlineInfo.topicNameLength = sizeof(MQTT_TOPIC_STATUS) - 1;
+    onlineInfo.pPayload = MQTT_ONLINE_MESSAGE;
+    onlineInfo.payloadLength = sizeof(MQTT_ONLINE_MESSAGE) - 1;
+    MQTT_Publish(&s_mqtt_ctx, &onlineInfo, 0);
+}
+
 static int mqtt_connect_and_subscribe(void)
 {
     TransportInterface_t transport;
@@ -397,19 +421,10 @@ static int mqtt_connect_and_subscribe(void)
 
     /* Publish our own retained "connected" status right away, so the topic
      * reflects reality again after any earlier LWT "disconnected" and
-     * doesn't just sit stuck on the last will forever. */
-    {
-        MQTTPublishInfo_t onlineInfo;
-
-        memset(&onlineInfo, 0, sizeof(onlineInfo));
-        onlineInfo.qos = MQTTQoS0;
-        onlineInfo.retain = true;
-        onlineInfo.pTopicName = MQTT_TOPIC_STATUS;
-        onlineInfo.topicNameLength = sizeof(MQTT_TOPIC_STATUS) - 1;
-        onlineInfo.pPayload = MQTT_ONLINE_MESSAGE;
-        onlineInfo.payloadLength = sizeof(MQTT_ONLINE_MESSAGE) - 1;
-        MQTT_Publish(&s_mqtt_ctx, &onlineInfo, 0);
-    }
+     * doesn't just sit stuck on the last will forever. Re-published every
+     * cycle too - see mqtt_publish_online_status()'s other call site in
+     * mqtt_printf_task(). */
+    mqtt_publish_online_status();
 
     sub.qos = MQTTQoS0;
     sub.pTopicFilter = MQTT_TOPIC_CMD;
@@ -580,6 +595,15 @@ static void mqtt_printf_task(void *arg)
             }
 
 #if MQTT_AUTO_PUBLISH
+            /* Keep-alive: refresh the retained "connected" status every
+             * cycle (see mqtt_publish_online_status()) - separate from the
+             * sensor reading below, so MQTT_TOPIC_STATUS always carries a
+             * recent timestamp even across many quiet cycles. Inside this
+             * #if (not unconditional) so MQTT_AUTO_PUBLISH=0's "stay fully
+             * silent, no traffic whatsoever" baseline test mode (see its
+             * own comment) still means what it says. */
+            mqtt_publish_online_status();
+
             /* No elapsed-time bookkeeping needed: every wake here already
              * IS the scheduled publish point, since the vTaskDelay below
              * sleeps for exactly one full MQTT_PUBLISH_INTERVAL_MS - this

@@ -200,7 +200,7 @@ extern void vcnl3020_test_poll_now(void);
  * OPEN<->CLOSED transition (see mqtt_publish_status()'s one call site),
  * never re-sent just because this timer fired.
  *
- * Raised 5000->600000 (2026-08-14, matches MQTT_KEEPALIVE_SEC 1:1, same
+ * Raised 5000->600000 (2026-08-14, matched MQTT_KEEPALIVE_SEC 1:1, same
  * pattern as demo/powertest_demo/src/mqtt_printf_task.c's
  * MQTT_PUBLISH_INTERVAL_MS): each tick's MQTT_ProcessLoop() call was found
  * to force a full radio wake ("wakebmps") under BMPS regardless of whether
@@ -208,8 +208,27 @@ extern void vcnl3020_test_poll_now(void);
  * day - confirmed the dominant remaining power cost once the sensor side
  * was fixed. A real STATUS-change publish is NOT gated by this - it still
  * happens immediately via the publish queue (see wifi_mqtt_task()'s
- * xQueueReceive() below), this only affects the idle/no-change case. */
-#define MQTT_HEARTBEAT_INTERVAL_MS   600000U
+ * xQueueReceive() below), this only affects the idle/no-change case.
+ *
+ * Lowered 600000->300000 (2026-08-21): matching MQTT_KEEPALIVE_SEC 1:1 left
+ * ZERO margin - one PINGREQ silently lost to this AP's routine per-wake
+ * beacon jitter (see VCNL3020_BMISS_THRESHOLD's comment - nonzero run_bmiss
+ * on effectively every DTIM10 wake is normal here) meant the NEXT check-in
+ * wasn't for another full 10 minutes, well past the broker's own ~1.5x
+ * keepalive tolerance (~900s) - confirmed on hardware as a real disconnect
+ * (MQTT_ProcessLoop() returning MQTTRecvFailed(4) after ~30+ min of a
+ * silently-dead TCP session, no WLAN drop involved). 300000 (5 min) - same
+ * cadence as demo/sht40_sensor/src/mqtt_printf_task.c's
+ * MQTT_PUBLISH_INTERVAL_MS, which sees no such drops - gives 3 check-ins
+ * inside that ~900s tolerance window instead of 1, so a single lost PINGREQ
+ * gets a retry before the broker gives up. Still well short of
+ * MQTT_KEEPALIVE_SEC, so this does not increase actual PINGREQ frequency by
+ * itself (MQTT_ProcessLoop() only sends one when actually due) - it only
+ * shortens how long a problem can go undetected. Real, bounded power cost:
+ * roughly double the forced "wakebmps" hits of the idle case versus 600000,
+ * capped at parity with sht40_sensor's own measured/accepted cadence, not
+ * open-ended. */
+#define MQTT_HEARTBEAT_INTERVAL_MS   300000U
 /* Depth of the OPEN/CLOSED event queue - a handful of transitions' worth of
  * slack in case the MQTT task is briefly mid-(re)connect; publishes are
  * cheap enough that this should never realistically fill under normal

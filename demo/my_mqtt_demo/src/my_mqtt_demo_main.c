@@ -29,3 +29,5 @@ void app_main(void)
     UART_SEND_DIRECT("my_mqtt_demo running\r\n");
     UART_SEND_DIRECT("app_main over\r\n");
 }
+
+

@@ -15,7 +15,10 @@
  * task the first time). DTIM10/BMPS power-save engages 15s after WLAN
  * associates and is disengaged again before any reconnect attempt - see
  * wifi_mqtt.c's top comment for the full design; does not touch the
- * VCNL3020/GPIO3 sensor logic in any way. */
+ * VCNL3020/GPIO3/pin-22 sensor logic in any way. Reconnect/delivery
+ * reliability (QoS2 STATUS publish with PUBCOMP confirmation, retained
+ * "connected"/Last Will "disconnected" on "sensor/proximity_status") mirrors
+ * demo/sht40_sensor/src/mqtt_printf_task.c - see wifi_mqtt.c's top comment. */
 void vcnl3020_mqtt_start(void);
 
 /* Call ONLY on a real STATUS transition (OPEN<->CLOSED) - never

@@ -30,12 +30,25 @@
  * (connect once, then publish-on-event, strictly - MQTT_TOPIC_PUB only ever
  * gets a message on a real OPEN<->CLOSED transition, never a repeat of the
  * unchanged status; see mqtt_publish_status()'s one call site). A
- * MQTT_HEARTBEAT_INTERVAL_MS (5s) tick drives the MQTT_ProcessLoop()
- * keepalive and prints a CONSOLE-ONLY liveness line so "still alive but
- * nothing changed" stays distinguishable from a hang on the console;
- * deliberately does NOT touch MQTT_TOPIC_PUB (re-publishing the last status
- * every tick would just spam MQTTX with the same value - see
- * wifi_mqtt_task()'s heartbeat branch).
+ * MQTT_HEARTBEAT_INTERVAL_MS tick drives the MQTT_ProcessLoop() keepalive
+ * and prints a CONSOLE-ONLY liveness line so "still alive but nothing
+ * changed" stays distinguishable from a hang on the console; deliberately
+ * does NOT touch MQTT_TOPIC_PUB (re-publishing the last status every tick
+ * would just spam MQTTX with the same value - see wifi_mqtt_task()'s
+ * heartbeat branch).
+ *
+ * Reconnect/delivery reliability now mirrors demo/sht40_sensor/src/
+ * mqtt_printf_task.c (2026-08-21): the STATUS publish is QoS2 with a
+ * PUBCOMP-wait-then-reconnect check (see mqtt_publish_status(),
+ * mqtt_event_cb(), MQTT_PUBACK_WAIT_TIMEOUT_MS) instead of QoS0, so a
+ * transition that never actually reaches the broker is detected instead of
+ * silently vanishing. MQTT_TOPIC_STATUS carries a retained "connected"
+ * (published by us right after MQTT_Connect()) and a non-retained Last Will
+ * "disconnected" (published by the BROKER if we ever drop off
+ * ungracefully) - same LWT pattern as sht40_sensor, purely additive to the
+ * STATUS/OPEN/CLOSED topic above. Does NOT change anything about the
+ * VCNL3020 sensor/interrupt side of this file (pin 22, prebmps poll,
+ * DTIM10/BMPS engage timing) - only the MQTT connect/publish plumbing.
  *
  * DTIM10/BMPS power-save:
  *
@@ -155,6 +168,17 @@ extern void vcnl3020_test_poll_now(void);
 #define MQTT_PORT                    1883
 #define MQTT_CLIENT_ID               "vcnl3020_test_qcc7030"
 #define MQTT_TOPIC_PUB               "sensor/proximity"
+/* Status/availability topic - same pattern as demo/sht40_sensor/src/
+ * mqtt_printf_task.c: retained "connected" published by US right after
+ * MQTT_Connect() succeeds; non-retained Last Will published by the BROKER
+ * (not us) if we ever drop off ungracefully (power loss, out of range,
+ * keepalive timeout) without a clean MQTT DISCONNECT. Lets a dashboard
+ * distinguish "device is actually gone" from "no STATUS transition lately" -
+ * MQTT_TOPIC_PUB alone can't tell those apart, since it's only ever updated
+ * on a real OPEN<->CLOSED edge (see mqtt_publish_status()'s one call site). */
+#define MQTT_TOPIC_STATUS            "sensor/proximity_status"
+#define MQTT_LWT_MESSAGE             "qcc disconnected"
+#define MQTT_ONLINE_MESSAGE          "qcc connected"
 #define MQTT_NETWORK_BUF_SIZE        256U
 /* 600s (10 min) instead of the MQTT-typical 60s - same value/reasoning as
  * demo/powertest_demo/src/mqtt_printf_task.c: fewer PINGREQ/PINGRESP
@@ -191,6 +215,23 @@ extern void vcnl3020_test_poll_now(void);
  * cheap enough that this should never realistically fill under normal
  * touch/release cadence. */
 #define MQTT_PUBLISH_QUEUE_DEPTH     8U
+
+/* QoS2 "exactly once, confirmed delivered" tracking for the STATUS publish -
+ * same pattern/reasoning as demo/sht40_sensor/src/mqtt_printf_task.c's
+ * mqtt_publish()/s_awaiting_pub_ack: a QoS0 MQTT_Publish() returning success
+ * only means the local transport accepted the write, not that the broker
+ * actually got it - under a degraded DTIM10/BMPS link that gap could let a
+ * real OPEN<->CLOSED transition vanish silently instead of showing up as a
+ * detectable failure. QoS2's PUBCOMP is a genuine broker-side confirmation
+ * instead - see mqtt_publish_status(), mqtt_event_cb(), and the ack-wait in
+ * wifi_mqtt_task(). */
+#define MQTT_OUTGOING_PUBLISH_RECORDS 2U
+/* How long to keep polling MQTT_ProcessLoop() after a QoS2 publish, waiting
+ * for its PUBCOMP, before giving up and reconnecting - same values/
+ * reasoning as sht40_sensor's MQTT_PUBACK_WAIT_TIMEOUT_MS/
+ * MQTT_PUBACK_POLL_INTERVAL_MS. */
+#define MQTT_PUBACK_WAIT_TIMEOUT_MS   5000U
+#define MQTT_PUBACK_POLL_INTERVAL_MS   200U
 
 /* How long wlan_associate() waits for a CONNECT event before re-issuing
  * qapi_WLAN_Commit() - bounds a silent hang if one attempt never completes,
@@ -320,6 +361,21 @@ static PlaintextParams_t s_net_params;
 static NetworkContext_t s_net_ctx;
 static MQTTContext_t s_mqtt_ctx;
 static uint8_t s_mqtt_buf[MQTT_NETWORK_BUF_SIZE];
+
+/* Outgoing-publish ack bookkeeping, needed by MQTT_InitStatefulQoS() to
+ * allow the QoS2 STATUS publish (see mqtt_publish_status()). Only ever one
+ * reading in flight at a time, but a couple of spare slots costs nothing -
+ * same as demo/sht40_sensor/src/mqtt_printf_task.c. No incoming QoS>0
+ * records needed, this client never subscribes to anything. */
+static MQTTPubAckInfo_t s_outgoing_pub_records[MQTT_OUTGOING_PUBLISH_RECORDS];
+
+/* Set when the QoS2 STATUS publish is sent, cleared when its PUBCOMP (the
+ * final "exactly once, confirmed delivered" step of the QoS2 handshake) is
+ * seen in mqtt_event_cb(). Checked right after publishing - see
+ * wifi_mqtt_task() - for why this matters over trusting MQTT_Publish()'s
+ * return value alone. */
+static volatile uint16_t s_last_pub_packet_id;
+static volatile uint8_t  s_awaiting_pub_ack;
 
 /* ------------------------------------------------------------------ */
 /*  WLAN - minimal station-mode connect, no shell/console involved      */
@@ -599,7 +655,18 @@ static uint32_t mqtt_get_time_ms(void)
 static void mqtt_event_cb(MQTTContext_t *ctx, MQTTPacketInfo_t *pkt, MQTTDeserializedInfo_t *info)
 {
     (void)ctx;
-    (void)info;
+
+    /* QoS2 4-packet handshake for our STATUS publish: broker sends PUBREC
+     * first (received, not yet fully settled), we reply PUBREL (handled
+     * internally by MQTT_ProcessLoop()), broker then sends PUBCOMP - THAT's
+     * the actual "exactly once, confirmed delivered" signal, not PUBREC.
+     * Same pattern as demo/sht40_sensor/src/mqtt_printf_task.c's
+     * mqtt_event_cb(). */
+    if (pkt->type == MQTT_PACKET_TYPE_PUBCOMP) {
+        if (s_awaiting_pub_ack && info->packetIdentifier == s_last_pub_packet_id)
+            s_awaiting_pub_ack = 0;
+        return;
+    }
 
     if ((pkt->type & 0xF0U) == MQTT_PACKET_TYPE_PUBLISH)
         info_printf("unexpected incoming publish (not subscribed to anything), ignored\n");
@@ -626,6 +693,7 @@ static int mqtt_connect(void)
     TransportInterface_t transport;
     MQTTFixedBuffer_t netbuf;
     MQTTConnectInfo_t conninfo;
+    MQTTPublishInfo_t willInfo;
     ServerInfo_t server;
     bool session_present;
     SocketStatus_t sock_status;
@@ -660,6 +728,19 @@ static int mqtt_connect(void)
         return -1;
     }
 
+    /* Needed for the QoS2 STATUS publish (see mqtt_publish_status()) - tracks
+     * unacked outgoing PUBLISHes so a lost one can actually be detected
+     * instead of trusting MQTT_Publish()'s return value alone. Same as
+     * demo/sht40_sensor/src/mqtt_printf_task.c's mqtt_connect_and_subscribe(). */
+    mqtt_status = MQTT_InitStatefulQoS(&s_mqtt_ctx, s_outgoing_pub_records,
+        MQTT_OUTGOING_PUBLISH_RECORDS, NULL, 0);
+    if (mqtt_status != MQTTSuccess) {
+        err_printf("MQTT_InitStatefulQoS failed: %s\n", MQTT_Status_strerror(mqtt_status));
+        Plaintext_Disconnect(&s_net_ctx);
+        return -1;
+    }
+    s_awaiting_pub_ack = 0;
+
     memset(&conninfo, 0, sizeof(conninfo));
     conninfo.cleanSession = true;
     conninfo.keepAliveSeconds = MQTT_KEEPALIVE_SEC;
@@ -674,12 +755,44 @@ static int mqtt_connect(void)
     conninfo.pPassword = MQTT_PASSWORD;
     conninfo.passwordLength = MQTT_PASSWORD ? (sizeof(MQTT_PASSWORD) - 1) : 0;
 
-    mqtt_status = MQTT_Connect(&s_mqtt_ctx, &conninfo, NULL, MQTT_CONNACK_TIMEOUT_MS, &session_present);
+    /* Last Will: the BROKER publishes this on our behalf, NOT retained, only
+     * if we drop off ungracefully (no clean MQTT DISCONNECT) - e.g. power
+     * loss, out of range, or keepalive timeout. Non-retained: a client that
+     * subscribes after the fact sees nothing until the next live event,
+     * rather than getting a possibly-stale "disconnected" forever. Same
+     * pattern as demo/sht40_sensor/src/mqtt_printf_task.c. */
+    memset(&willInfo, 0, sizeof(willInfo));
+    willInfo.qos = MQTTQoS0;
+    willInfo.retain = false;
+    willInfo.pTopicName = MQTT_TOPIC_STATUS;
+    willInfo.topicNameLength = sizeof(MQTT_TOPIC_STATUS) - 1;
+    willInfo.pPayload = MQTT_LWT_MESSAGE;
+    willInfo.payloadLength = sizeof(MQTT_LWT_MESSAGE) - 1;
+
+    mqtt_status = MQTT_Connect(&s_mqtt_ctx, &conninfo, &willInfo, MQTT_CONNACK_TIMEOUT_MS, &session_present);
     if (mqtt_status != MQTTSuccess) {
         err_printf("MQTT_Connect (CONNECT/CONNACK) failed: %s - check broker username/password\n",
             MQTT_Status_strerror(mqtt_status));
         Plaintext_Disconnect(&s_net_ctx);
         return -1;
+    }
+
+    /* Publish our own retained "connected" status right away, so the topic
+     * reflects reality again after any earlier LWT "disconnected" and
+     * doesn't just sit stuck on the last will forever. Best-effort (QoS0) -
+     * unlike the STATUS publish itself, this is a nice-to-have, not
+     * something worth reconnecting over if it's dropped. */
+    {
+        MQTTPublishInfo_t onlineInfo;
+
+        memset(&onlineInfo, 0, sizeof(onlineInfo));
+        onlineInfo.qos = MQTTQoS0;
+        onlineInfo.retain = true;
+        onlineInfo.pTopicName = MQTT_TOPIC_STATUS;
+        onlineInfo.topicNameLength = sizeof(MQTT_TOPIC_STATUS) - 1;
+        onlineInfo.pPayload = MQTT_ONLINE_MESSAGE;
+        onlineInfo.payloadLength = sizeof(MQTT_ONLINE_MESSAGE) - 1;
+        MQTT_Publish(&s_mqtt_ctx, &onlineInfo, 0);
     }
 
     info_printf("connected to %s:%d\n", MQTT_BROKER, MQTT_PORT);
@@ -690,16 +803,25 @@ static int mqtt_publish_status(uint8_t is_closed)
 {
     MQTTPublishInfo_t pub;
     MQTTStatus_t st;
+    uint16_t packet_id;
     int saved_errno;
 
     memset(&pub, 0, sizeof(pub));
-    pub.qos = MQTTQoS0;
+    /* QoS2, not QoS0 - see MQTT_OUTGOING_PUBLISH_RECORDS's comment: a QoS0
+     * MQTT_Publish() returning success only means the local transport
+     * accepted the write, not that the broker actually got it. Caller
+     * (wifi_mqtt_task()) waits for s_awaiting_pub_ack to clear (PUBCOMP, see
+     * mqtt_event_cb()) before considering this STATUS transition actually
+     * delivered - same pattern as demo/sht40_sensor/src/mqtt_printf_task.c's
+     * mqtt_publish(). */
+    pub.qos = MQTTQoS2;
     pub.pTopicName = MQTT_TOPIC_PUB;
     pub.topicNameLength = sizeof(MQTT_TOPIC_PUB) - 1;
     pub.pPayload = is_closed ? "CLOSED" : "OPEN";
     pub.payloadLength = is_closed ? (sizeof("CLOSED") - 1) : (sizeof("OPEN") - 1);
 
-    st = MQTT_Publish(&s_mqtt_ctx, &pub, 0);
+    packet_id = MQTT_GetPacketId(&s_mqtt_ctx);
+    st = MQTT_Publish(&s_mqtt_ctx, &pub, packet_id);
     saved_errno = errno; /* grabbed immediately - see logTransportError() in plaintext_posix.c */
 
     if (st != MQTTSuccess) {
@@ -709,7 +831,11 @@ static int mqtt_publish_status(uint8_t is_closed)
         return -1;
     }
 
-    info_printf("published %s to %s\n", (const char *)pub.pPayload, MQTT_TOPIC_PUB);
+    s_last_pub_packet_id = packet_id;
+    s_awaiting_pub_ack = 1;
+
+    info_printf("published %s to %s (packet id %u, awaiting PUBCOMP)\n",
+        (const char *)pub.pPayload, MQTT_TOPIC_PUB, (unsigned)packet_id);
     return 0;
 }
 
@@ -854,6 +980,43 @@ static void wifi_mqtt_task(void *arg)
                 if (mqtt_publish_status(is_closed) != 0) {
                     err_printf("publish failed, reconnecting\n");
                     break;
+                }
+
+                /* QoS2 needs PUBREC/PUBREL/PUBCOMP round trips to actually
+                 * settle - MQTT_Publish() returning success above only means
+                 * the local transport accepted the write. Poll for a few
+                 * seconds here so a healthy link gets a fair chance to
+                 * complete the handshake, especially right after the radio
+                 * wakes from a long BMPS/DTIM10 sleep to send this. If it's
+                 * still not settled after this, the link is genuinely bad -
+                 * reconnect rather than silently leaving this STATUS
+                 * transition unconfirmed. Same pattern as
+                 * demo/sht40_sensor/src/mqtt_printf_task.c. */
+                if (s_awaiting_pub_ack) {
+                    uint32_t waited_ms = 0;
+                    uint8_t  session_lost = 0;
+                    MQTTStatus_t ack_st;
+
+                    while (s_awaiting_pub_ack && !session_lost && waited_ms < MQTT_PUBACK_WAIT_TIMEOUT_MS) {
+                        vTaskDelay(pdMS_TO_TICKS(MQTT_PUBACK_POLL_INTERVAL_MS));
+                        waited_ms += MQTT_PUBACK_POLL_INTERVAL_MS;
+
+                        ack_st = MQTT_ProcessLoop(&s_mqtt_ctx);
+                        if (ack_st != MQTTSuccess && ack_st != MQTTNeedMoreBytes) {
+                            err_printf("MQTT_ProcessLoop failed while settling (status=%d), reconnecting\n",
+                                (int)ack_st);
+                            session_lost = 1;
+                        }
+                    }
+
+                    if (session_lost || s_awaiting_pub_ack) {
+                        if (!session_lost) {
+                            err_printf("STATUS publish never acked after %ums, reconnecting\n",
+                                (unsigned)waited_ms);
+                        }
+                        s_awaiting_pub_ack = 0;
+                        break;
+                    }
                 }
             } else {
                 /* Heartbeat tick (queue wait above timed out - nothing

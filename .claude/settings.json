@@ -62,7 +62,9 @@
       "Bash(grep -rn \"define EINPROGRESS\\\\|define EWOULDBLOCK\" \"c:/qcc7030/qcc7030sdk/comp/lwip/src/include\" 2>/dev/null)",
       "Read(//c/qcc7030/qcc7030sdk/comp/lwip/src/include/**)",
       "Bash(grep -rln \"define EINPROGRESS\" \"c:/qcc7030/qcc7030sdk\" 2>/dev/null | grep -v \"/build/\\\\|/output/\")",
-      "Bash(awk '/^void nt_socpm_check_sleep_entry_failure|^static.*nt_socpm_check_sleep_entry_failure|nt_socpm_check_sleep_entry_failure\\\\\\(sleep_mode|nt_socpm_check_sleep_entry_failure\\\\\\(.*mode.*,.*,.*\\\\\\)$/{print NR\": \"$0}' \"c:/qcc7030/qcc7030sdk/qccsdk/modules/core/system/sys_src/nt_socpm_sleep.c\")"
+      "Bash(awk '/^void nt_socpm_check_sleep_entry_failure|^static.*nt_socpm_check_sleep_entry_failure|nt_socpm_check_sleep_entry_failure\\\\\\(sleep_mode|nt_socpm_check_sleep_entry_failure\\\\\\(.*mode.*,.*,.*\\\\\\)$/{print NR\": \"$0}' \"c:/qcc7030/qcc7030sdk/qccsdk/modules/core/system/sys_src/nt_socpm_sleep.c\")",
+      "Bash(python -c ' *)",
+      "Bash(python -c \"import ast; ast.parse\\(open\\('build.py'\\).read\\(\\)\\); print\\('OK: build.py parses'\\)\")"
     ]
   }
 }

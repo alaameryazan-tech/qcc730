@@ -108,6 +108,7 @@ projects_common = [
     "//demo/vcnl3020_test_demo",
     "//demo/sht40_sensor",
     "//demo/dtim10_control_demo",
+    "//demo/my_mqtt_demo",
 ]
 
 if (!CONFIG_WPS_LIB) {

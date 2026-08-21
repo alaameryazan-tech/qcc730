@@ -823,7 +823,7 @@
     "IDEVer": "^0.5.6",
     "sdkName": "qccsdk_qcc730",
     "sdkVer": "1.0.0",
-    "activated": true,
+    "activated": false,
     "chipID": "QCC730",
     "chipVersion": "v2",
     "chipTarget": "QCC730",

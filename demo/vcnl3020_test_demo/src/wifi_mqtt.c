@@ -136,10 +136,23 @@ extern void vcnl3020_test_poll_now(void);
 #define WIFI_PASSPHRASE              "Tech91847"
 
 /* Same broker/account as demo/powertest_demo/src/mqtt_printf_task.c. */
+/* TEMP DIAGNOSTIC - same local-mosquitto swap as demo/sht40_sensor/src/
+ * mqtt_printf_task.c (see that file's MQTT_USE_LOCAL_TEST_BROKER comment
+ * for the full reasoning): points at a broker on the same WiFi/subnet as
+ * the board instead of the VPS, to isolate WAN/router-NAT-path issues from
+ * device-side ones. Flip back to 0 to restore the VPS + credentials. */
+#define MQTT_USE_LOCAL_TEST_BROKER  1
+
+#if MQTT_USE_LOCAL_TEST_BROKER
+#define MQTT_BROKER                  "192.168.80.163"
+#define MQTT_USERNAME                NULL
+#define MQTT_PASSWORD                NULL
+#else
 #define MQTT_BROKER                  "139.162.181.126"
-#define MQTT_PORT                    1883
 #define MQTT_USERNAME                "AABBCCDD"
 #define MQTT_PASSWORD                "KXL8DHPsXggvRELD"
+#endif
+#define MQTT_PORT                    1883
 #define MQTT_CLIENT_ID               "vcnl3020_test_qcc7030"
 #define MQTT_TOPIC_PUB               "sensor/proximity"
 #define MQTT_NETWORK_BUF_SIZE        256U
@@ -201,8 +214,9 @@ extern void vcnl3020_test_poll_now(void);
  *     wake over a 9+ minute run - not enough to escalate to a full
  *     disconnect in that run, but a real, measurable degradation versus
  *     DTIM10 below, and a plausible contributor to how costly each
- *     exit_reason=2 recovery wake is (see VCNL3020_BMPS_IDLE_TIMEOUT_MS
- *     below - reverted together with this value for the same reason).
+ *     exit_reason=2 recovery wake is (see dtim10_bmps_enable()'s
+ *     qapi_bmps_cfg(1, 0) call below - reverted together with this value
+ *     for the same reason).
  *   - DTIM10 (1000 TU, this value): confirmed clean, zero beacon-miss
  *     escalations over a 20+ minute run.
  * REMINDER: this value does NOT control the dominant ~30-40s wake pattern
@@ -213,25 +227,41 @@ extern void vcnl3020_test_poll_now(void);
  * untested DTIM13. Set before every qapi_WLAN_Commit(), see
  * wlan_associate(). */
 #define VCNL3020_DTIM10_LISTEN_INTERVAL_TU  1000U
-/* BMPS idle-timeout override - REMOVED (2026-08-20). This used to pass 200
- * (previously 50, before that - see git history - both tuned values from
- * ambient_power_demo.c) to qapi_bmps_cfg(), which sends WMI_STA_IDLE_TIMER_
- * CMDID to override the WMAC firmware's own default idle-before-sleep
- * timing. demo/sht40_sensor/src/powertest_demo.c's pm_enable() never sends
- * that command at all - it leaves the firmware's default idle timeout
- * untouched - and shows a substantially smaller measured power spike on the
- * same AP/network than this file's 200ms-override build did. Both 50ms and
- * 200ms are more aggressive (shorter idle-before-sleep) than whatever the
- * firmware's own default is, and 50ms was already confirmed to cause a real
- * beacon-miss/reconnect storm on this hardware (see the old comment this
- * replaced) - 200ms's own hardware capture (2026-08-18) still showed
- * nonzero run_bmiss every cycle. Matching SHT40's approach exactly:
- * qapi_bmps_cfg(1, 0) below skips the WMI_STA_IDLE_TIMER_CMDID call
- * entirely (see its "if (idle_timeout)" guard in qapi_lowpower.c), so BMPS
- * enables with whatever idle timing the firmware defaults to - re-add an
- * explicit override here only if a real need for a different value shows up
- * again, and re-verify with a hardware capture (bmps_wake_probe_cb()) if so. */
-#define VCNL3020_BMPS_IDLE_TIMEOUT_MS       200U
+/* Same fix as demo/sht40_sensor/src/powertest_demo.c's POWERTEST_BMISS_
+ * THRESHOLD (2026-08-20): raises the WLAN firmware's consecutive-beacon-
+ * miss disconnect threshold from its default (~10) to 30, this SDK's own
+ * ceiling for the equivalent MIB knob (NT_DEVCFG_CONN_CONSECUTIVE_BMISS_
+ * THRESHOLD, modules/wifi/config_ini/mib/mib.xml, range locked to exactly
+ * 30). Root cause is identical here: this AP doesn't reliably deliver
+ * every beacon/buffered frame under DTIM10/BMPS - the nonzero run_bmiss on
+ * effectively every wake documented throughout this file's DTIM10/13/15
+ * history above is normal jitter for this AP, not a dead link, but the
+ * firmware's default threshold doesn't know that and tears down/rebuilds
+ * the association once enough of that ordinary jitter accumulates. Applied
+ * in wifi_mqtt_task() right after WLAN associates (see the WLAN section
+ * below), NOT in wlan_event_cb() - unlike sht40_sensor's original mistake,
+ * wlan_associate() already runs from this task's own context, not from
+ * the event callback, so there's no risk of qapi_WLAN_Set_Param() (which
+ * blocks on the WMI command's own completion signal for this param)
+ * deadlocking against itself. */
+#define VCNL3020_BMISS_THRESHOLD            30U
+/* BMPS idle-timeout override - actually removed now (2026-08-20 comment
+ * above claimed this already, but the call site below was still passing
+ * 200 - that mismatch is why this demo's wakebmps spikes kept costing
+ * noticeably more than demo/sht40_sensor's even at DTIM13/DTIM10: this
+ * demo was still forcing the firmware's WMI_STA_IDLE_TIMER_CMDID with an
+ * aggressive 200ms idle-before-sleep, while sht40_sensor's pm_enable()
+ * never sends that command at all and just uses the firmware's own
+ * default idle timing. 200ms's own hardware capture (2026-08-18) already
+ * showed nonzero run_bmiss every cycle even back when this was believed
+ * fixed. 50ms (an even earlier value, see git history) was confirmed
+ * worse - a real beacon-miss/reconnect storm. Matching SHT40 for real
+ * this time: qapi_bmps_cfg(1, 0) below skips the WMI_STA_IDLE_TIMER_CMDID
+ * call entirely (see its "if (idle_timeout)" guard in qapi_lowpower.c),
+ * so BMPS enables with whatever idle timing the firmware defaults to -
+ * re-add an explicit override only if a real need for a different value
+ * shows up again, and re-verify with a hardware capture
+ * (bmps_wake_probe_cb()) if so. */
 /* Delay after WLAN associates before engaging DTIM10/BMPS - gives a fixed
  * full-power window for WLAN+MQTT to fully establish before the radio
  * starts duty-cycling. */
@@ -434,7 +464,10 @@ static void dtim10_bmps_enable(void)
     ignore_bcmc.enable = 1;
     wmi_cmd_send(WMI_BMPS_IGNORE_BCMC_CMDID, &ignore_bcmc, sizeof(ignore_bcmc));
 
-    qapi_bmps_cfg(1, VCNL3020_BMPS_IDLE_TIMEOUT_MS);
+    /* idle_timeout=0 - matches demo/sht40_sensor/src/powertest_demo.c's
+     * pm_enable() for real now, see VCNL3020_DTIM10_LISTEN_INTERVAL_TU's
+     * neighboring comment for why this call site was the actual bug. */
+    qapi_bmps_cfg(1, 0);
 
     /* Pin 22 (bmps_wake_probe_cb()) takes over from here - no reason to
      * keep forcing a plain poll now that BMPS is actually active. */
@@ -632,10 +665,14 @@ static int mqtt_connect(void)
     conninfo.keepAliveSeconds = MQTT_KEEPALIVE_SEC;
     conninfo.pClientIdentifier = MQTT_CLIENT_ID;
     conninfo.clientIdentifierLength = sizeof(MQTT_CLIENT_ID) - 1;
+    /* MQTT_USERNAME/PASSWORD are NULL in the MQTT_USE_LOCAL_TEST_BROKER
+     * (anonymous) build above - sizeof(MQTT_USERNAME) would be sizeof(a
+     * pointer) in that case, not a string length, so length must be 0
+     * whenever the pointer itself is NULL. */
     conninfo.pUserName = MQTT_USERNAME;
-    conninfo.userNameLength = sizeof(MQTT_USERNAME) - 1;
+    conninfo.userNameLength = MQTT_USERNAME ? (sizeof(MQTT_USERNAME) - 1) : 0;
     conninfo.pPassword = MQTT_PASSWORD;
-    conninfo.passwordLength = sizeof(MQTT_PASSWORD) - 1;
+    conninfo.passwordLength = MQTT_PASSWORD ? (sizeof(MQTT_PASSWORD) - 1) : 0;
 
     mqtt_status = MQTT_Connect(&s_mqtt_ctx, &conninfo, NULL, MQTT_CONNACK_TIMEOUT_MS, &session_present);
     if (mqtt_status != MQTTSuccess) {
@@ -729,6 +766,26 @@ static void wifi_mqtt_task(void *arg)
             if (!wlan_wait_connected())
                 err_printf("WLAN connect timed out, retrying\n");
         }
+
+        /* Raise the beacon-miss disconnect threshold BEFORE BMPS/DTIM10
+         * engages below - see VCNL3020_BMISS_THRESHOLD's comment. Re-applied
+         * on every fresh association (this loop re-enters here after any
+         * reconnect), since it's a runtime WMI pdev param tied to the
+         * current connection, not something that survives a disassociate/
+         * reassociate on its own. */
+        {
+            uint8_t bmiss_threshold = VCNL3020_BMISS_THRESHOLD;
+
+            if (qapi_WLAN_Set_Param(DEV_STA_ID, __QAPI_WLAN_PARAM_GROUP_WIRELESS,
+                    __QAPI_WLAN_PARAM_GROUP_WIRELESS_STA_BMISS_CONFIG,
+                    &bmiss_threshold, sizeof(bmiss_threshold), FALSE) != QAPI_OK) {
+                err_printf("set bmiss threshold failed, disconnect-under-DTIM10 fix not applied\n");
+            } else {
+                info_printf("bmiss threshold raised to %u (DTIM10/BMPS disconnect fix)\n",
+                    (unsigned)bmiss_threshold);
+            }
+        }
+
         bmps_enable_at_ms = hres_timer_curr_time_ms() + VCNL3020_BMPS_ENTER_DELAY_MS;
 
         /* Covers the sensor until pin 22 takes over once BMPS actually

@@ -1,0 +1,35 @@
+import("//configs_decl.gni")
+
+my_mqtt_demo_inc = [
+    "src",
+    "//drivers/wlan/",
+]
+
+my_mqtt_demo_src = [
+    "src/my_mqtt_demo_main.c",
+    # "src/wifi_mqtt.c",
+
+    # WLAN driver sources - not pulled in globally here since prj.conf
+    # deliberately does not set CONFIG_WIFI_SHELL (wifi_mqtt.c is a
+    # shell/console-free WLAN client, same pattern as demo/mqtt_demo and
+    # demo/vcnl3020_test_demo).
+    "//drivers/wlan/wlan_drv.c",
+    "//drivers/wlan/qapi_wlan_base.c",
+    "//drivers/wlan/qapi_wlan_param_group.c",
+    "//drivers/wlan/wmi_api.c",
+    "//drivers/wlan/wlan_qapi_helper.c",
+]
+
+not_needed("*", [ ])
+
+config("_config") {
+    if (image_name == "FERMION_MY_MQTT_DEMO") {
+        include_dirs = my_mqtt_demo_inc
+    }
+}
+
+source_set("my_mqtt_demo") {
+    if (image_name == "FERMION_MY_MQTT_DEMO") {
+        sources = my_mqtt_demo_src
+    }
+}
